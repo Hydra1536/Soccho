@@ -22,7 +22,7 @@ jobs:
     env:
       DEBUG: 'false'
       SOCIAL_SECRET_KEY: ci-social-secret
-      DATABASE_URL: postgresql://soccho:soccho@localhost:5432/soccho
+      DATABASE_URL: db-secret
       REDIS_CACHE_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4

@@ -23,7 +23,7 @@ jobs:
       DEBUG: 'false'
       NOTIFICATION_SECRET_KEY: ci-notification-secret
       AUTH_SECRET_KEY: ci-auth-secret
-      DATABASE_URL: postgresql://soccho:soccho@localhost:5432/soccho
+      DATABASE_URL: db-secret
       REDIS_CACHE_URL: redis://localhost:6379/0
       CHANNEL_LAYERS_REDIS_URL: redis://localhost:6379/2
     steps:

@@ -22,7 +22,7 @@ jobs:
     env:
       DEBUG: 'false'
       ADMIN_SECRET_KEY: ci-admin-secret
-      DATABASE_URL: postgresql://soccho:soccho@localhost:5432/soccho
+      DATABASE_URL: db-secret
       ADMIN_URL_PATH: 119115131318115/
     steps:
       - uses: actions/checkout@v4
