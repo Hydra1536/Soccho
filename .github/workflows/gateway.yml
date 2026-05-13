@@ -1,0 +1,59 @@
+name: gateway-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'gateway/**'
+      - '.github/workflows/gateway.yml'
+  pull_request:
+    paths:
+      - 'gateway/**'
+      - '.github/workflows/gateway.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.12-slim
+    defaults:
+      run:
+        working-directory: gateway
+    env:
+      DEBUG: 'false'
+      GATEWAY_SECRET_KEY: ci-gateway-secret
+      AUTH_GRPC_HOST: auth
+      AUTH_GRPC_PORT: 8001
+      SOCIAL_GRPC_HOST: social
+      SOCIAL_GRPC_PORT: 8002
+      TRANSACTION_GRPC_HOST: transaction
+      TRANSACTION_GRPC_PORT: 8003
+      NOTIFICATION_GRPC_HOST: notification
+      NOTIFICATION_GRPC_PORT: 8004
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit pytest
+          pip install -r requirements.txt
+      - name: Security audit
+        run: |
+          pip-audit -r requirements.txt --format=json > pip-audit.json || true
+          python - <<'PY'
+import json, sys
+with open('pip-audit.json', 'r', encoding='utf-8') as f:
+    data = json.load(f)
+issues = []
+for dep in data.get('dependencies', []):
+    for v in dep.get('vulns', []):
+        sev = str(v.get('severity') or v.get('cvss_severity') or '').lower()
+        if sev in {'high', 'critical'}:
+            issues.append((dep.get('name'), v.get('id'), sev))
+if issues:
+    print('High/Critical vulnerabilities found:', issues)
+    sys.exit(1)
+print('No High/Critical vulnerabilities detected by severity metadata.')
+PY
+      - name: Run tests (FastAPI + Pydantic consistency)
+        run: pytest -q

@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+httpx
+grpcio
+grpcio-tools
+pydantic-settings
+python-dotenv
+pybreaker

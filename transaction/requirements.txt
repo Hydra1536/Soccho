@@ -1,0 +1,11 @@
+django
+graphene-django
+django-ninja
+django-ninja-jwt
+celery[redis]
+django-cryptography
+redis
+pybreaker
+grpcio
+python-dotenv
+gunicorn

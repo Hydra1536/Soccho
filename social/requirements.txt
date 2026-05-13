@@ -1,0 +1,14 @@
+django
+djangorestframework
+graphene-django
+psycopg2-binary
+grpcio
+redis
+hiredis
+django-cors-headers
+django-cryptography
+pybreaker
+gunicorn
+promise
+asgiref
+python-dotenv

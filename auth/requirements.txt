@@ -1,0 +1,10 @@
+djangorestframework
+djangorestframework-simplejwt
+social-auth-app-django
+django-axes
+django-cryptography
+grpcio
+grpcio-tools
+redis
+hiredis
+requests

@@ -1,0 +1,79 @@
+import asyncio
+import json
+
+import redis.asyncio as redis
+from asgiref.sync import sync_to_async
+from channels.layers import get_channel_layer
+from django.conf import settings
+
+from apps.notifications.models import Notification
+
+
+def _map_event_to_notification(channel: str, payload: dict):
+    if channel == 'transaction.created':
+        ntype = Notification.TYPE_LEND_CONFIRMATION
+    elif channel == 'transaction.confirmed':
+        ntype = Notification.TYPE_PAYMENT_ACK
+    else:
+        ntype = Notification.TYPE_DUE_REMINDER
+
+    recipient_id = payload.get('borrower_id') or payload.get('recipient_id')
+    return recipient_id, ntype
+
+
+@sync_to_async
+def _persist_notification(recipient_id: str, ntype: str, payload: dict):
+    row = Notification.objects.create(
+        recipient_id=recipient_id,
+        type=ntype,
+        payload=payload,
+        is_cleared=False,
+    )
+    return {
+        'id': row.id,
+        'recipient_id': str(row.recipient_id),
+        'type': row.type,
+        'payload': row.payload,
+        'is_cleared': row.is_cleared,
+        'created_at': row.created_at.isoformat(),
+    }
+
+
+async def run_pubsub_listener():
+    client = redis.from_url(settings.REDIS_CACHE_URL, decode_responses=True)
+    pubsub = client.pubsub()
+    await pubsub.subscribe('transaction.created', 'transaction.confirmed')
+
+    layer = get_channel_layer()
+
+    try:
+        while True:
+            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+            if message is None:
+                await asyncio.sleep(0.1)
+                continue
+
+            channel = message.get('channel')
+            data = message.get('data')
+            try:
+                payload = json.loads(data)
+            except Exception:
+                continue
+
+            recipient_id, ntype = _map_event_to_notification(channel, payload)
+            if not recipient_id:
+                continue
+
+            persisted = await _persist_notification(str(recipient_id), ntype, payload)
+            await layer.group_send(
+                f"notifications_{recipient_id}",
+                {
+                    'type': 'broadcast_notification',
+                    'event': channel,
+                    'notification': persisted,
+                },
+            )
+    finally:
+        await pubsub.unsubscribe('transaction.created', 'transaction.confirmed')
+        await pubsub.close()
+        await client.close()

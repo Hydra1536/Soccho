@@ -1,0 +1,4 @@
+# full path: C:/Users/Hubar Tech/Downloads/Soccho/Soccho/requirements-dev.txt
+grpcio
+grpcio-tools
+python-dotenv

@@ -1,0 +1,88 @@
+# full path: C:/Users/Hubar Tech/Downloads/Soccho/Soccho/shared/proto/soccho.proto
+syntax = "proto3";
+
+package soccho;
+
+service AuthService {
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse);
+}
+
+service SocialService {
+  rpc CheckFriendship(CheckFriendshipRequest) returns (CheckFriendshipResponse);
+  rpc GetFriendList(GetFriendListRequest) returns (GetFriendListResponse);
+}
+
+service TransactionService {
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+}
+
+service NotificationService {
+  rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+}
+
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string error = 3;
+}
+
+message GetUserInfoRequest {
+  string user_id = 1;
+}
+
+message GetUserInfoResponse {
+  string user_id = 1;
+  string username = 2;
+  string email = 3;
+  bool is_active = 4;
+}
+
+message CheckFriendshipRequest {
+  string user_id = 1;
+  string friend_id = 2;
+}
+
+message CheckFriendshipResponse {
+  bool is_friend = 1;
+}
+
+message GetFriendListRequest {
+  string user_id = 1;
+}
+
+message GetFriendListResponse {
+  repeated Friend friends = 1;
+}
+
+message Friend {
+  string user_id = 1;
+  string username = 2;
+}
+
+message GetBalanceRequest {
+  string user_id = 1;
+}
+
+message GetBalanceResponse {
+  string user_id = 1;
+  double balance = 2;
+  string currency = 3;
+}
+
+message SendNotificationRequest {
+  string user_id = 1;
+  string title = 2;
+  string body = 3;
+  map<string, string> metadata = 4;
+}
+
+message SendNotificationResponse {
+  bool success = 1;
+  string message_id = 2;
+  string error = 3;
+}

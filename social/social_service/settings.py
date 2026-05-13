@@ -1,0 +1,73 @@
+import os
+from pathlib import Path
+
+from corsheaders.defaults import default_headers
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
+
+SECRET_KEY = os.getenv('SOCIAL_SECRET_KEY', 'social-dev-secret')
+DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
+ALLOWED_HOSTS = ['*']
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'django.contrib.postgres',
+    'rest_framework',
+    'graphene_django',
+    'corsheaders',
+    'apps.friendships',
+    'apps.search',
+]
+
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+ROOT_URLCONF = 'social_service.urls'
+WSGI_APPLICATION = 'social_service.wsgi.application'
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('POSTGRES_DB', 'soccho'),
+        'USER': os.getenv('POSTGRES_USER', 'soccho'),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'soccho'),
+        'HOST': os.getenv('POSTGRES_HOST', 'postgres'),
+        'PORT': os.getenv('POSTGRES_PORT', '5432'),
+    }
+}
+
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'UTC'
+USE_I18N = True
+USE_TZ = True
+STATIC_URL = 'static/'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.CursorPagination',
+    'PAGE_SIZE': 10,
+}
+
+GRAPHENE = {
+    'SCHEMA': 'graphql.schema.schema',
+}
+
+CORS_ALLOWED_ORIGINS = [x.strip() for x in os.getenv('ALLOWED_ORIGINS', '').split(',') if x.strip()]
+CORS_ALLOW_HEADERS = list(default_headers) + ['x-service', 'authorization']
+
+REDIS_CACHE_URL = os.getenv('REDIS_CACHE_URL', 'redis://redis:6379/0')

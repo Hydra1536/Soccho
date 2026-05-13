@@ -1,0 +1,116 @@
+# full path: C:/Users/Hubar Tech/Downloads/Soccho/Soccho/docker-compose.yml
+version: "3.9"
+
+services:
+  gateway:
+    image: python:3.12-slim
+    container_name: soccho-gateway
+    env_file:
+      - .env
+    working_dir: /app
+    command: ["sh", "-c", "python -m http.server 8000"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      - auth
+      - social
+      - transaction
+      - notification
+      - redis
+      - postgres
+
+  auth:
+    image: python:3.12-slim
+    container_name: soccho-auth
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://soccho:soccho@postgres:5432/soccho
+    working_dir: /app
+    command: ["sh", "-c", "python -m http.server 8001"]
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+      - postgres
+
+  social:
+    image: python:3.12-slim
+    container_name: soccho-social
+    env_file:
+      - .env
+    working_dir: /app
+    command: ["sh", "-c", "python -m http.server 8002"]
+    ports:
+      - "8002:8002"
+    depends_on:
+      - redis
+      - postgres
+
+  transaction:
+    image: python:3.12-slim
+    container_name: soccho-transaction
+    env_file:
+      - .env
+    working_dir: /app
+    command: ["sh", "-c", "python -m http.server 8003"]
+    ports:
+      - "8003:8003"
+    depends_on:
+      - redis
+      - postgres
+
+  notification:
+    image: python:3.12-slim
+    container_name: soccho-notification
+    env_file:
+      - .env
+    working_dir: /app
+    command: ["sh", "-c", "python -m http.server 8004"]
+    ports:
+      - "8004:8004"
+    depends_on:
+      - redis
+      - postgres
+
+  admin:
+    image: python:3.12-slim
+    container_name: soccho-admin
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://soccho:soccho@postgres:5432/soccho
+    working_dir: /app
+    command: ["sh", "-c", "python -m http.server 8005"]
+    ports:
+      - "8005:8005"
+    depends_on:
+      - auth
+      - postgres
+
+  postgres:
+    image: postgres:16
+    container_name: soccho-postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: soccho
+      POSTGRES_USER: soccho
+      POSTGRES_PASSWORD: soccho
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: soccho-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:

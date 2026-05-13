@@ -1,0 +1,2 @@
+web: gunicorn social_service.wsgi
+grpc: python manage.py run_grpc

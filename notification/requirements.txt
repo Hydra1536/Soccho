@@ -1,0 +1,11 @@
+django
+channels
+channels-redis
+grpcio
+redis
+hiredis
+pyjwt
+pybreaker
+python-dotenv
+daphne
+psycopg2-binary

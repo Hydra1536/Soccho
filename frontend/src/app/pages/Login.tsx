@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
+import { googleLogin, login, register, verifyOTP, OTPContext } from '../../lib/auth';
 
 type AuthScreen = 'login' | 'register' | 'otp';
 
@@ -12,41 +13,73 @@ export default function Login() {
   const [screen, setScreen] = useState<AuthScreen>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [username, setUsername] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpContext, setOtpContext] = useState<OTPContext>('register');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setScreen('otp');
+    setError(null);
+    setLoading(true);
+    try {
+      await login(username, password);
+      navigate('/home');
+    } catch {
+      setError('Invalid credentials');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setScreen('otp');
+    setError(null);
+    setLoading(true);
+    try {
+      await register(username, email, password, confirmPassword);
+      setOtpContext('register');
+      navigateTo('otp');
+    } catch {
+      setError('Unable to register');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleOTPComplete = (otp: string) => {
-    console.log('OTP Verified:', otp);
-    navigate('/home');
-  };
+  const handleVerify = async () => {
+    if (!otpCode) {
+      setError('Please enter the OTP code');
+      return;
+    }
 
-  const handleGoogleAuth = () => {
-    console.log('Google OAuth initiated');
-    navigate('/home');
+    setError(null);
+    setLoading(true);
+    try {
+      await verifyOTP(username, otpCode, otpContext);
+      navigate('/home');
+    } catch {
+      setError('Invalid credentials');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const slideVariants = {
     enter: (direction: number) => ({
       x: direction > 0 ? 300 : -300,
-      opacity: 0
+      opacity: 0,
     }),
     center: {
       x: 0,
-      opacity: 1
+      opacity: 1,
     },
     exit: (direction: number) => ({
       x: direction > 0 ? -300 : 300,
-      opacity: 0
-    })
+      opacity: 0,
+    }),
   };
 
   const getDirection = (from: AuthScreen, to: AuthScreen) => {
@@ -62,19 +95,22 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4"
+    <div
+      className="min-h-screen w-full flex items-center justify-center p-4"
       style={{
-        background: 'linear-gradient(150deg, #4F46E5 0%, #7C3AED 100%)'
-      }}>
-
+        background: 'linear-gradient(150deg, #4F46E5 0%, #7C3AED 100%)',
+      }}
+    >
       <div className="w-full max-w-[360px]">
         <div className="bg-white rounded-[24px] p-8 shadow-2xl overflow-hidden">
-
-          {/* Soccho Wordmark */}
-          <h1 className="text-center text-3xl mb-8"
-            style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: '#4F46E5' }}>
+          <h1
+            className="text-center text-3xl mb-8"
+            style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: '#4F46E5' }}
+          >
             Soccho
           </h1>
+
+          {error && <p className="text-sm text-[#EF4444] mb-4 text-center">{error}</p>}
 
           <AnimatePresence mode="wait" custom={direction}>
             {screen === 'login' && (
@@ -89,26 +125,32 @@ export default function Login() {
               >
                 <form onSubmit={handleLogin} className="space-y-4">
                   <Input
-                    type="email"
-                    label="Email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    type="text"
+                    label="Username"
+                    placeholder="your_username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     required
                   />
 
                   <Input
                     type="password"
                     label="Password"
-                    placeholder="••••••••"
+                    placeholder="********"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                   />
 
-                  <Button type="submit" fullWidth className="mt-6">
-                    Log In
+                  <Button type="submit" fullWidth className="mt-6" disabled={loading}>
+                    {loading ? 'Signing In...' : 'Log In'}
                   </Button>
+
+                  <div className="text-center">
+                    <Link to="/forgot-password" className="text-sm text-[#4F46E5] hover:underline">
+                      Forgot password?
+                    </Link>
+                  </div>
 
                   <div className="relative my-6">
                     <div className="absolute inset-0 flex items-center">
@@ -123,20 +165,14 @@ export default function Login() {
                     type="button"
                     variant="secondary"
                     fullWidth
-                    onClick={handleGoogleAuth}
+                    onClick={googleLogin}
                     className="flex items-center justify-center gap-3"
                   >
-                    <svg width="18" height="18" viewBox="0 0 18 18">
-                      <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
-                      <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.183l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
-                      <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.167.282-1.707V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.335z"/>
-                      <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-                    </svg>
                     Google
                   </Button>
 
                   <p className="text-center text-sm text-[#6B7280] mt-6">
-                    Don't have an account?{' '}
+                    Don&apos;t have an account?{' '}
                     <button
                       type="button"
                       onClick={() => navigateTo('register')}
@@ -162,10 +198,10 @@ export default function Login() {
                 <form onSubmit={handleRegister} className="space-y-4">
                   <Input
                     type="text"
-                    label="Full Name"
-                    placeholder="John Doe"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    label="Username"
+                    placeholder="john_doe"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     required
                   />
 
@@ -181,39 +217,23 @@ export default function Login() {
                   <Input
                     type="password"
                     label="Password"
-                    placeholder="••••••••"
+                    placeholder="********"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                   />
 
-                  <Button type="submit" fullWidth className="mt-6">
-                    Create Account
-                  </Button>
+                  <Input
+                    type="password"
+                    label="Confirm Password"
+                    placeholder="********"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
 
-                  <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-[#E5E7EB]"></div>
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="px-2 bg-white text-[#6B7280]">or continue with</span>
-                    </div>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    fullWidth
-                    onClick={handleGoogleAuth}
-                    className="flex items-center justify-center gap-3"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 18 18">
-                      <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
-                      <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.183l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
-                      <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.167.282-1.707V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.335z"/>
-                      <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-                    </svg>
-                    Google
+                  <Button type="submit" fullWidth className="mt-6" disabled={loading}>
+                    {loading ? 'Creating...' : 'Create Account'}
                   </Button>
 
                   <p className="text-center text-sm text-[#6B7280] mt-6">
@@ -251,28 +271,18 @@ export default function Login() {
                   </p>
                 </div>
 
-                <OTPInput onComplete={handleOTPComplete} />
+                <OTPInput onComplete={setOtpCode} />
 
-                <Button fullWidth onClick={() => navigate('/home')}>
-                  Verify & Continue
+                <Button fullWidth onClick={handleVerify} disabled={loading}>
+                  {loading ? 'Verifying...' : 'Verify & Continue'}
                 </Button>
-
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => navigateTo('login')}
-                    className="text-sm text-[#6B7280] hover:text-[#4F46E5]"
-                  >
-                    Didn't receive code? <span className="font-medium">Resend</span>
-                  </button>
-                </div>
 
                 <button
                   type="button"
                   onClick={() => navigateTo('login')}
                   className="w-full text-center text-sm text-[#6B7280] hover:text-[#111827]"
                 >
-                  ← Back to login
+                  Back to login
                 </button>
               </motion.div>
             )}
