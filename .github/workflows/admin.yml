@@ -28,7 +28,7 @@ jobs:
       DATABASE_URL: db_secret
       ADMIN_URL_PATH: 119115131318115/
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

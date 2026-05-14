@@ -34,7 +34,7 @@ jobs:
       NOTIFICATION_GRPC_HOST: notification
       NOTIFICATION_GRPC_PORT: 8004
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
