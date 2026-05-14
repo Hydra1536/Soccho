@@ -1,4 +1,4 @@
-django
+django>=4.2,<5
 djangorestframework
 graphene-django
 psycopg2-binary

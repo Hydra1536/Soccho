@@ -12,4 +12,4 @@ COPY . /app
 
 EXPOSE 8005
 
-CMD ["gunicorn", "admin_service.wsgi", "--bind", "0.0.0.0:8005"]
+CMD ["sh", "-c", "gunicorn admin_service.wsgi --bind 0.0.0.0:${PORT:-8005}"]

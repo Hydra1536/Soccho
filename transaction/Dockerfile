@@ -10,6 +10,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app
 
-EXPOSE 8002
+EXPOSE 8003
 
-CMD ["sh", "-c", "gunicorn social_service.wsgi --bind 0.0.0.0:${PORT:-8002}"]
+CMD ["sh", "-c", "gunicorn transaction_service.wsgi --bind 0.0.0.0:${PORT:-8003}"]

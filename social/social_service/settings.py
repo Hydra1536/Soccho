@@ -82,7 +82,7 @@ REST_FRAMEWORK = {
 }
 
 GRAPHENE = {
-    'SCHEMA': 'graphql.schema.schema',
+    'SCHEMA': 'social_graphql.schema.schema',
 }
 
 CORS_ALLOWED_ORIGINS = [x.strip() for x in os.getenv('ALLOWED_ORIGINS', '').split(',') if x.strip()]

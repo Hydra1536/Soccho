@@ -1,4 +1,4 @@
-django
+django>=4.2,<5
 channels
 channels-redis
 grpcio
