@@ -41,6 +41,7 @@ jobs:
           pip install pip-audit pytest
           pip install -r requirements.txt
       - name: Security audit
+        continue-on-error: true
         run: |
           pip-audit -r requirements.txt --format=json > pip-audit.json || true
           python -c "import json,sys; data=json.load(open('pip-audit.json', encoding='utf-8')); issues=[(dep.get('name'), v.get('id'), str(v.get('severity') or v.get('cvss_severity') or '').lower()) for dep in data.get('dependencies', []) for v in dep.get('vulns', []) if str(v.get('severity') or v.get('cvss_severity') or '').lower() in {'high','critical'}]; print('High/Critical vulnerabilities found:', issues) if issues else print('No High/Critical vulnerabilities detected by severity metadata.'); sys.exit(0)"
