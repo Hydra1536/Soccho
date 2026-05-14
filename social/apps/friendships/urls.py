@@ -7,4 +7,5 @@ urlpatterns = [
     path('accept/', AcceptRequestView.as_view(), name='accept-friend-request'),
     path('reject/', RejectRequestView.as_view(), name='reject-friend-request'),
     path('list/', ListFriendsView.as_view(), name='list-friends'),
+    path('friends/', ListFriendsView.as_view(), name='friends'),
 ]

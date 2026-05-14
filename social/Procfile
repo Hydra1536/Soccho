@@ -1,2 +1,2 @@
-web: gunicorn social_service.wsgi
+web: gunicorn social_service.wsgi --bind 0.0.0.0:$PORT
 grpc: python manage.py run_grpc

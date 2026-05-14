@@ -7,10 +7,10 @@ from django.db import transaction as db_transaction
 from django.http import HttpRequest
 from ninja import NinjaAPI, Router
 
-from apps.balances.services import BalanceVersionConflict, update_balance
+from apps.balances.services import BalanceVersionConflict, update_balance, update_balance_latest
 from apps.transactions.models import Transaction
-from apps.transactions.schemas import ConfirmTransactionIn, TransactionCreateIn, TransactionOut
-from apps.transactions.services import compute_balance_delta, ensure_pending, get_transaction_for_update, mark_confirmed
+from apps.transactions.schemas import ConfirmTransactionIn, ResolveTransactionIn, TransactionCreateIn, TransactionOut
+from apps.transactions.services import compute_balance_delta, ensure_pending, get_transaction_for_update, mark_confirmed, mark_denied
 
 router = Router(tags=['transactions'])
 
@@ -88,6 +88,43 @@ def confirm_transaction(request: HttpRequest, transaction_id: str, payload: Conf
         'net_balance': str(balance.net_balance),
     })
     return 200, tx
+
+
+@router.post('/{transaction_id}/resolve/', response={200: TransactionOut, 403: dict, 404: dict, 409: dict})
+def resolve_transaction(request: HttpRequest, transaction_id: str, payload: ResolveTransactionIn):
+    action = payload.action.strip().lower()
+    if action not in {'agree', 'disagree'}:
+        return 409, {'detail': 'Unsupported action'}
+
+    with db_transaction.atomic():
+        tx = get_transaction_for_update(transaction_id)
+        if tx is None:
+            return 404, {'detail': 'Transaction not found'}
+
+        if str(tx.borrower_id) != str(payload.borrower_id):
+            return 403, {'detail': 'Only borrower can resolve'}
+
+        try:
+            ensure_pending(tx)
+        except ValueError:
+            return 409, {'detail': 'Transaction is not pending'}
+
+        if action == 'agree':
+            delta = compute_balance_delta(tx)
+            balance = update_balance_latest(tx.friendship_id, delta)
+            tx = mark_confirmed(tx)
+            _publish('transaction.confirmed', {
+                'transaction_id': str(tx.id),
+                'friendship_id': str(tx.friendship_id),
+                'new_version': balance.version,
+                'net_balance': str(balance.net_balance),
+                'borrower_id': str(tx.borrower_id),
+                'lender_id': str(tx.lender_id),
+            })
+            return 200, tx
+
+        tx = mark_denied(tx)
+        return 200, tx
 
 
 api = NinjaAPI(title='Soccho Transaction Service')

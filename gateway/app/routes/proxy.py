@@ -4,21 +4,30 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
+from app.config import get_settings
+
 router = APIRouter()
 
-SERVICE_BASES: Dict[str, str] = {
-    '/api/auth/': 'http://auth:8001',
-    '/api/social/': 'http://social:8002',
-    '/api/transaction/': 'http://transaction:8003',
-    '/api/notification/': 'http://notification:8004',
-}
 
-GRAPHQL_SERVICE_MAP: Dict[str, str] = {
-    'auth': 'http://auth:8001',
-    'social': 'http://social:8002',
-    'transaction': 'http://transaction:8003',
-    'notification': 'http://notification:8004',
-}
+def _service_bases() -> Dict[str, str]:
+    settings = get_settings()
+    return {
+        '/api/auth/': settings.auth_http_base_url,
+        '/api/social/': settings.social_http_base_url,
+        '/api/transaction/': settings.transaction_http_base_url,
+        '/api/transactions/': settings.transaction_http_base_url,
+        '/api/notification/': settings.notification_http_base_url,
+    }
+
+
+def _graphql_service_map() -> Dict[str, str]:
+    settings = get_settings()
+    return {
+        'auth': settings.auth_http_base_url,
+        'social': settings.social_http_base_url,
+        'transaction': settings.transaction_http_base_url,
+        'notification': settings.notification_http_base_url,
+    }
 
 
 async def _forward_request(target_base: str, suffix: str, request: Request) -> Response:
@@ -30,6 +39,9 @@ async def _forward_request(target_base: str, suffix: str, request: Request) -> R
 
     headers = dict(request.headers)
     headers.pop('host', None)
+    user_id = getattr(request.state, 'user_id', '')
+    if user_id:
+        headers['x-user-id'] = user_id
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         upstream = await client.request(
@@ -50,7 +62,7 @@ async def _forward_request(target_base: str, suffix: str, request: Request) -> R
 @router.api_route('/api/{service}/{path:path}', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
 async def proxy_api(service: str, path: str, request: Request):
     prefix = f'/api/{service}/'
-    base = SERVICE_BASES.get(prefix)
+    base = _service_bases().get(prefix)
     if not base:
         raise HTTPException(status_code=404, detail='Service route not found')
 
@@ -61,7 +73,7 @@ async def proxy_api(service: str, path: str, request: Request):
 @router.post('/graphql/{path:path}')
 async def proxy_graphql(path: str, request: Request):
     service_name = request.headers.get('X-Service', '').strip().lower()
-    base = GRAPHQL_SERVICE_MAP.get(service_name)
+    base = _graphql_service_map().get(service_name)
     if not base:
         raise HTTPException(status_code=400, detail='X-Service header is required and must be valid')
 

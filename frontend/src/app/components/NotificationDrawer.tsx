@@ -42,7 +42,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     const token = localStorage.getItem('access_token');
     if (!token) return;
 
-    const base = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const base = import.meta.env.VITE_NOTIFICATION_WS_URL || import.meta.env.VITE_API_URL || 'http://localhost:8000';
     const wsBase = toWsUrl(base);
     const ws = new WebSocket(`${wsBase}/ws/notifications/?token=${encodeURIComponent(token)}`);
     wsRef.current = ws;

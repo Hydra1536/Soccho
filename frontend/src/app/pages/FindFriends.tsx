@@ -12,6 +12,7 @@ type SearchResult = {
   name?: string;
   mutualFriends?: number;
   loyaltyScore?: number;
+  loyalty_score?: number;
 };
 
 type SearchHistoryItem = {
@@ -57,6 +58,12 @@ export default function FindFriends() {
   const clearSearch = () => {
     setSearchQuery('');
     setShowResults(false);
+  };
+
+  const normalizeScore = (person: SearchResult) => {
+    const raw = person.loyaltyScore ?? person.loyalty_score ?? 0;
+    const bounded = Math.max(0, Math.min(100, Number(raw) || 0));
+    return bounded;
   };
 
   return (
@@ -119,6 +126,15 @@ export default function FindFriends() {
                     <Avatar name={person.username || person.name || `Friend ${idx + 1}`} size="medium" />
                     <div className="flex-1">
                       <h3 className="font-medium text-[#111827]">{person.username || person.name || `Friend ${idx + 1}`}</h3>
+                      <div className="mt-2">
+                        <div className="h-2 rounded-full bg-[#E5E7EB] overflow-hidden">
+                          <div
+                            className="h-full bg-[#4F46E5] rounded-full transition-all"
+                            style={{ width: `${normalizeScore(person)}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-[#6B7280] mt-1">Loyalty Score</p>
+                      </div>
                     </div>
                     <button className="px-4 py-2 bg-[#4F46E5] text-white rounded-full text-sm font-medium hover:bg-[#3730A3] transition-colors">
                       Add

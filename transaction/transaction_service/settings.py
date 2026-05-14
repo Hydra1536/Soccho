@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -36,8 +37,22 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'transaction_service.urls'
 WSGI_APPLICATION = 'transaction_service.wsgi.application'
 
-DATABASES = {
-    'default': {
+
+def _database_config():
+    database_url = os.getenv('DATABASE_URL', '').strip()
+    if database_url:
+        parsed = urlparse(database_url)
+        if parsed.scheme in {'postgres', 'postgresql'}:
+            return {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': parsed.path.lstrip('/'),
+                'USER': parsed.username or '',
+                'PASSWORD': parsed.password or '',
+                'HOST': parsed.hostname or 'localhost',
+                'PORT': str(parsed.port or 5432),
+            }
+
+    return {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.getenv('POSTGRES_DB', 'soccho'),
         'USER': os.getenv('POSTGRES_USER', 'soccho'),
@@ -45,6 +60,9 @@ DATABASES = {
         'HOST': os.getenv('POSTGRES_HOST', 'postgres'),
         'PORT': os.getenv('POSTGRES_PORT', '5432'),
     }
+
+DATABASES = {
+    'default': _database_config()
 }
 
 REDIS_CACHE_URL = os.getenv('REDIS_CACHE_URL', 'redis://redis:6379/0')

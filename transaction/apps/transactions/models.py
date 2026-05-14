@@ -20,7 +20,7 @@ class Transaction(models.Model):
     borrower_id = models.UUIDField()
     friendship_id = models.UUIDField(db_index=True)
     amount = encrypt(models.DecimalField(max_digits=12, decimal_places=2))
-    due_date = encrypt(models.DateField())
+    due_date = encrypt(models.DateField(null=True, blank=True))
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
     idempotency_key = models.CharField(max_length=128, unique=True)
     is_deleted = models.BooleanField(default=False)

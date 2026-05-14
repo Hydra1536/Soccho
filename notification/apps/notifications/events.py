@@ -42,7 +42,7 @@ def _persist_notification(recipient_id: str, ntype: str, payload: dict):
 async def run_pubsub_listener():
     client = redis.from_url(settings.REDIS_CACHE_URL, decode_responses=True)
     pubsub = client.pubsub()
-    await pubsub.subscribe('transaction.created', 'transaction.confirmed')
+    await pubsub.subscribe('transaction.created', 'transaction.confirmed', 'transaction.due_reminder')
 
     layer = get_channel_layer()
 
@@ -74,6 +74,6 @@ async def run_pubsub_listener():
                 },
             )
     finally:
-        await pubsub.unsubscribe('transaction.created', 'transaction.confirmed')
+        await pubsub.unsubscribe('transaction.created', 'transaction.confirmed', 'transaction.due_reminder')
         await pubsub.close()
         await client.close()

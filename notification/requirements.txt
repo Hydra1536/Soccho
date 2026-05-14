@@ -9,3 +9,4 @@ pybreaker
 python-dotenv
 daphne
 psycopg2-binary
+httpx

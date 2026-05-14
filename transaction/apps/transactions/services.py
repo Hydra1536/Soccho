@@ -24,3 +24,10 @@ def mark_confirmed(transaction_obj: Transaction) -> Transaction:
     transaction_obj.status = Transaction.STATUS_CONFIRMED
     transaction_obj.save(update_fields=['status', 'updated_at'])
     return transaction_obj
+
+
+@db_transaction.atomic
+def mark_denied(transaction_obj: Transaction) -> Transaction:
+    transaction_obj.status = Transaction.STATUS_DENIED
+    transaction_obj.save(update_fields=['status', 'updated_at'])
+    return transaction_obj

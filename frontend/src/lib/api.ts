@@ -4,6 +4,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export const ACCESS_TOKEN_KEY = 'access_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';
+export const USER_ID_KEY = 'user_id';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -24,11 +25,32 @@ function getRefreshToken(): string | null {
 function setTokens(access: string, refresh: string): void {
   localStorage.setItem(ACCESS_TOKEN_KEY, access);
   localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+  const userId = extractUserId(access);
+  if (userId) {
+    localStorage.setItem(USER_ID_KEY, userId);
+  }
 }
 
 function clearTokens(): void {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(USER_ID_KEY);
+}
+
+function extractUserId(token: string): string | null {
+  try {
+    const [, payload] = token.split('.');
+    if (!payload) {
+      return null;
+    }
+
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+    const decoded = JSON.parse(atob(padded)) as { sub?: string };
+    return decoded.sub || null;
+  } catch {
+    return null;
+  }
 }
 
 function flushQueue(token: string | null): void {

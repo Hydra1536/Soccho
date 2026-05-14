@@ -35,6 +35,11 @@ def save_search_history(user_id: str, query: str) -> None:
     pipe.execute()
 
 
+def get_search_history(user_id: str) -> list[str]:
+    key = f'search_history:{user_id}'
+    return _redis_client().lrange(key, 0, 49)
+
+
 async def get_loyalty_score(user_id: str) -> float:
     cache_key = f'loyalty_score:{user_id}'
     client = _redis_client()

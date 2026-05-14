@@ -1,3 +1,5 @@
+import os
+
 import grpc
 import pybreaker
 
@@ -10,7 +12,9 @@ class SocialServiceUnavailable(Exception):
 
 class SocialClient:
     def __init__(self) -> None:
-        self.channel = grpc.aio.insecure_channel('social:8002')
+        host = os.getenv('SOCIAL_GRPC_HOST', 'social')
+        port = os.getenv('SOCIAL_GRPC_PORT', '8002')
+        self.channel = grpc.aio.insecure_channel(f'{host}:{port}')
         self.stub = soccho_pb2_grpc.SocialServiceStub(self.channel)
         self.breaker = pybreaker.CircuitBreaker(fail_max=5, reset_timeout=30)
 

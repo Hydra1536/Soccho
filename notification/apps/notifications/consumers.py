@@ -1,10 +1,9 @@
 import json
 from urllib.parse import parse_qs
 
-import grpc
+import httpx
 import jwt
 import pybreaker
-from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
@@ -18,8 +17,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         self.user_id = None
         self.group_name = None
         self.breaker = pybreaker.CircuitBreaker(fail_max=5, reset_timeout=30)
-        self.transaction_channel = grpc.aio.insecure_channel('transaction:8003')
-        self.resolve_action_call = self.transaction_channel.unary_unary('/soccho.TransactionService/ResolveReminderAction')
 
     async def connect(self):
         user_id = self._extract_user_id_from_jwt()
@@ -39,7 +36,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     async def disconnect(self, close_code):
         if self.group_name:
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
-        await self.transaction_channel.close()
 
     async def receive(self, text_data=None, bytes_data=None):
         if not text_data:
@@ -61,8 +57,13 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({'error': 'notification_id required'}))
             return
 
+        notification = await self._get_notification(str(notification_id), self.user_id)
+        if notification is None:
+            await self.send(text_data=json.dumps({'error': 'Notification not found'}))
+            return
+
         try:
-            await self.breaker.call_async(self._call_transaction_action, action, str(notification_id))
+            await self.breaker.call_async(self._call_transaction_action, action, notification)
         except Exception:
             await self.send(text_data=json.dumps({'error': 'Service Unavailable'}))
             return
@@ -87,9 +88,21 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         except jwt.PyJWTError:
             return None
 
-    async def _call_transaction_action(self, action: str, notification_id: str):
-        message = json.dumps({'action': action, 'notification_id': notification_id, 'user_id': self.user_id}).encode('utf-8')
-        return await self.resolve_action_call(message)
+    async def _call_transaction_action(self, action: str, notification: dict):
+        payload = notification.get('payload') or {}
+        transaction_id = str(payload.get('transaction_id', '')).strip()
+        borrower_id = str(payload.get('borrower_id', '')).strip()
+        if not transaction_id or not borrower_id:
+            raise ValueError('Notification payload is missing transaction details')
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                f"{settings.TRANSACTION_HTTP_BASE_URL}/api/transactions/{transaction_id}/resolve/",
+                json={'action': action, 'borrower_id': borrower_id},
+            )
+        if response.status_code >= 400:
+            raise ValueError(f'Transaction service returned {response.status_code}')
+        return response.json()
 
     @database_sync_to_async
     def _get_pending_notifications(self, user_id: str):
@@ -109,3 +122,17 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _clear_notification(self, notification_id: str, user_id: str):
         Notification.objects.filter(id=notification_id, recipient_id=user_id).update(is_cleared=True)
+
+    @database_sync_to_async
+    def _get_notification(self, notification_id: str, user_id: str):
+        row = Notification.objects.filter(id=notification_id, recipient_id=user_id).first()
+        if row is None:
+            return None
+        return {
+            'id': row.id,
+            'recipient_id': str(row.recipient_id),
+            'type': row.type,
+            'payload': row.payload,
+            'is_cleared': row.is_cleared,
+            'created_at': row.created_at.isoformat(),
+        }

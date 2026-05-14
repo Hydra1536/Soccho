@@ -24,16 +24,43 @@ export default function FriendDetail() {
   const navigate = useNavigate();
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [note, setNote] = useState('');
   const [transactions, setTransactions] = useState<LedgerTx[]>([]);
   const [netBalance, setNetBalance] = useState(0);
   const [loading, setLoading] = useState(false);
-
-  const friendName = `Friend ${id}`;
+  const [friendUserId, setFriendUserId] = useState('');
+  const [friendName, setFriendName] = useState('Friend');
 
   useEffect(() => {
     const fetchLedger = async () => {
       if (!id) return;
+      const myId = localStorage.getItem('user_id') || '';
+
+      try {
+        const [friendshipsResponse, directoryResponse] = await Promise.all([
+          api.get('/api/social/friends/'),
+          api.post(
+            '/graphql/',
+            {
+              query: `query FriendList { friendList { userId username } }`,
+            },
+            { headers: { 'X-Service': 'social' } }
+          ),
+        ]);
+
+        const friendships = friendshipsResponse.data?.results || friendshipsResponse.data || [];
+        const friendship = friendships.find((row: any) => String(row.id) === String(id));
+        if (friendship) {
+          const otherUserId = friendship.requester_id === myId ? friendship.addressee_id : friendship.requester_id;
+          setFriendUserId(otherUserId || '');
+
+          const friendNodes = directoryResponse.data?.data?.friendList || [];
+          const friendNode = friendNodes.find((row: any) => String(row.userId) === String(otherUserId));
+          setFriendName(friendNode?.username || 'Friend');
+        }
+      } catch {
+        setFriendUserId('');
+      }
+
       const { data } = await api.post(
         '/graphql/',
         {
@@ -64,22 +91,20 @@ export default function FriendDetail() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id) return;
+    if (!id || !friendUserId) return;
 
     setLoading(true);
     try {
       await api.post('/api/transactions/', {
         lender_id: myId,
-        borrower_id: id,
+        borrower_id: friendUserId,
         friendship_id: id,
         amount: Number(amount),
         due_date: dueDate,
         idempotency_key: crypto.randomUUID(),
-        note,
       });
       setAmount('');
       setDueDate('');
-      setNote('');
     } finally {
       setLoading(false);
     }
@@ -137,17 +162,6 @@ export default function FriendDetail() {
             </div>
 
             <Input type="date" label="Due Date (optional)" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-
-            <div>
-              <label className="block text-sm text-[#111827] mb-2 font-medium">Note</label>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="What's this for?"
-                className="w-full h-20 px-4 py-3 bg-[#F3F4F6] border border-[#E5E7EB] rounded-xl text-[#111827] resize-none focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-[#4F46E5] transition-all"
-              />
-            </div>
-
             <Button type="submit" fullWidth className="mt-6" disabled={loading}>
               {loading ? 'Submitting...' : 'Submit'}
             </Button>
@@ -180,7 +194,9 @@ export default function FriendDetail() {
                         </p>
                         <StatusChip status={transaction.status} />
                       </div>
-                      <p className="text-xs text-[#9CA3AF]">{new Date(transaction.due_date).toLocaleDateString('en-GB')}</p>
+                      <p className="text-xs text-[#9CA3AF]">
+                        {transaction.due_date ? new Date(transaction.due_date).toLocaleDateString('en-GB') : 'No due date'}
+                      </p>
                     </div>
                   </div>
                 </motion.div>

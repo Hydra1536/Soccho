@@ -23,12 +23,26 @@ type FriendRow = {
   created_at: string;
 };
 
+type FriendNode = {
+  userId: string;
+  username: string;
+  loyaltyScore?: number | null;
+};
+
+type FriendCard = {
+  id: string;
+  name: string;
+  lastTransaction: string;
+  balance: number;
+  type: 'owed' | 'owe';
+};
+
 export default function Home() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [friends, setFriends] = useState<FriendRow[]>([]);
+  const [friendCards, setFriendCards] = useState<FriendCard[]>([]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -44,13 +58,64 @@ export default function Home() {
         { headers: { 'X-Service': 'transaction' } }
       );
       if (data?.data?.dashboardSummary) {
-        setSummary(data.data.dashboardSummary);
+        const row = data.data.dashboardSummary;
+        setSummary({
+          user_id: String(row.userId || userId),
+          total_lent: Number(row.totalLent || 0),
+          total_borrowed: Number(row.totalBorrowed || 0),
+          total_confirmed: Number(row.totalConfirmed || 0),
+        });
       }
     };
 
     const fetchFriends = async () => {
-      const { data } = await api.get('/api/social/friends/');
-      setFriends(data?.results || data || []);
+      const userId = localStorage.getItem('user_id');
+      if (!userId) return;
+
+      const [friendResponse, directoryResponse] = await Promise.all([
+        api.get('/api/social/friends/'),
+        api.post(
+          '/graphql/',
+          {
+            query: `query FriendList { friendList { userId username loyaltyScore } }`,
+          },
+          { headers: { 'X-Service': 'social' } }
+        ),
+      ]);
+
+      const rows: FriendRow[] = friendResponse.data?.results || friendResponse.data || [];
+      const directory: FriendNode[] = directoryResponse.data?.data?.friendList || [];
+
+      const cards = await Promise.all(
+        rows.map(async (row, idx) => {
+          const friendUserId = row.requester_id === userId ? row.addressee_id : row.requester_id;
+          const friendMeta = directory.find((entry) => entry.userId === friendUserId);
+
+          let netBalance = 0;
+          try {
+            const { data } = await api.post(
+              '/graphql/',
+              {
+                query: `query FriendLedger($friendshipId: UUID!) { friendLedger(friendshipId: $friendshipId) { netBalance } }`,
+                variables: { friendshipId: row.id },
+              },
+              { headers: { 'X-Service': 'transaction' } }
+            );
+            netBalance = Number(data?.data?.friendLedger?.netBalance || 0);
+          } catch {
+            netBalance = 0;
+          }
+
+          return {
+            id: row.id,
+            name: friendMeta?.username || `Friend ${idx + 1}`,
+            lastTransaction: row.status,
+            balance: Math.abs(netBalance),
+            type: netBalance >= 0 ? 'owed' as const : 'owe' as const,
+          };
+        })
+      );
+      setFriendCards(cards);
     };
 
     void fetchDashboard();
@@ -76,18 +141,6 @@ export default function Home() {
       { month: 'Jun', amount: base * 1.7 },
     ];
   }, [summary]);
-
-  const friendCards = friends.map((row, idx) => {
-    const myId = localStorage.getItem('user_id') || '';
-    const friendId = row.requester_id === myId ? row.addressee_id : row.requester_id;
-    return {
-      id: friendId || `${idx}`,
-      name: `Friend ${idx + 1}`,
-      lastTransaction: row.status,
-      balance: 0,
-      type: 'owe' as const,
-    };
-  });
 
   return (
     <div className="min-h-screen bg-[#F3F4F6] pb-20">
@@ -168,7 +221,7 @@ export default function Home() {
                       <h3 className="font-medium text-[#111827]">{friend.name}</h3>
                       <p className="text-sm text-[#6B7280]">{friend.lastTransaction}</p>
                     </div>
-                    <BalanceChip amount={Math.abs(friend.balance)} type={friend.type} />
+                    <BalanceChip amount={friend.balance} type={friend.type} />
                   </div>
                 </div>
               </Link>

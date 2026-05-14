@@ -1,14 +1,18 @@
-from uuid import UUID
+import os
 
 import grpc
 
 from grpc_infra.generated import soccho_pb2, soccho_pb2_grpc
 
+AUTH_GRPC_HOST = os.getenv('AUTH_GRPC_HOST', 'auth')
+AUTH_GRPC_PORT = os.getenv('AUTH_GRPC_PORT', '8001')
+TRANSACTION_GRPC_HOST = os.getenv('TRANSACTION_GRPC_HOST', 'transaction')
+TRANSACTION_GRPC_PORT = os.getenv('TRANSACTION_GRPC_PORT', '8003')
 
-_auth_channel = grpc.aio.insecure_channel('auth:8001')
+_auth_channel = grpc.aio.insecure_channel(f'{AUTH_GRPC_HOST}:{AUTH_GRPC_PORT}')
 _auth_stub = soccho_pb2_grpc.AuthServiceStub(_auth_channel)
 
-_transaction_channel = grpc.aio.insecure_channel('transaction:8003')
+_transaction_channel = grpc.aio.insecure_channel(f'{TRANSACTION_GRPC_HOST}:{TRANSACTION_GRPC_PORT}')
 _transaction_stub = soccho_pb2_grpc.TransactionServiceStub(_transaction_channel)
 
 
