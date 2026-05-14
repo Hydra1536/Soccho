@@ -1,0 +1,48 @@
+# Git / CI / editor
+.git/
+.github/
+.vscode/
+.idea/
+
+# Local environment files
+.env
+.env.*
+frontend/.env
+frontend/.env.*
+
+# Python caches and virtualenvs
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+ENV/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Node / frontend local artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+.pnpm-store/
+.npm/
+.yarn/
+
+# Logs / temp / reports
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+pip-audit.json
+
+# Docs and local guides (not needed at runtime)
+*.md
+

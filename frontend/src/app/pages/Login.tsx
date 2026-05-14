@@ -67,6 +67,19 @@ export default function Login() {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      await googleLogin();
+      navigate('/home');
+    } catch {
+      setError('Google login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const slideVariants = {
     enter: (direction: number) => ({
       x: direction > 0 ? 300 : -300,
@@ -165,7 +178,8 @@ export default function Login() {
                     type="button"
                     variant="secondary"
                     fullWidth
-                    onClick={googleLogin}
+                    onClick={handleGoogleLogin}
+                    disabled={loading}
                     className="flex items-center justify-center gap-3"
                   >
                     Google

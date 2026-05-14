@@ -171,18 +171,32 @@ class LogoutView(PublicEndpointMixin, APIView):
 
 class GoogleOAuthView(PublicEndpointMixin, APIView):
     def post(self, request):
+        id_token = request.data.get("id_token")
         access_token = request.data.get("access_token")
-        if not access_token:
+        if not id_token and not access_token:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            req = urllib_request.Request(
-                f"https://www.googleapis.com/oauth2/v3/userinfo?access_token={parse.quote(access_token)}",
-                headers={"Accept": "application/json"},
-                method="GET",
-            )
-            with urllib_request.urlopen(req, timeout=10) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
+            if id_token:
+                req = urllib_request.Request(
+                    f"https://oauth2.googleapis.com/tokeninfo?id_token={parse.quote(id_token)}",
+                    headers={"Accept": "application/json"},
+                    method="GET",
+                )
+                with urllib_request.urlopen(req, timeout=10) as resp:
+                    payload = json.loads(resp.read().decode("utf-8"))
+
+                expected_aud = getattr(settings, "GOOGLE_CLIENT_ID", "")
+                if expected_aud and payload.get("aud") != expected_aud:
+                    return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+            else:
+                req = urllib_request.Request(
+                    f"https://www.googleapis.com/oauth2/v3/userinfo?access_token={parse.quote(access_token)}",
+                    headers={"Accept": "application/json"},
+                    method="GET",
+                )
+                with urllib_request.urlopen(req, timeout=10) as resp:
+                    payload = json.loads(resp.read().decode("utf-8"))
         except Exception:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 

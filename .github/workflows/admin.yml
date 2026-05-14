@@ -1,5 +1,8 @@
 name: admin-ci
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -15,14 +18,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: python:3.12-slim
+      image: python:3.12.3-slim
     defaults:
       run:
         working-directory: admin
     env:
       DEBUG: 'false'
-      ADMIN_SECRET_KEY: ci-admin-secret
-      DATABASE_URL: db-secret
+      ADMIN_SECRET_KEY: admin_secret
+      DATABASE_URL: db_secret
       ADMIN_URL_PATH: 119115131318115/
     steps:
       - uses: actions/checkout@v4
@@ -34,22 +37,12 @@ jobs:
       - name: Security audit
         run: |
           pip-audit -r requirements.txt --format=json > pip-audit.json || true
-          python - <<'PY'
-import json, sys
-with open('pip-audit.json', 'r', encoding='utf-8') as f:
-    data = json.load(f)
-issues = []
-for dep in data.get('dependencies', []):
-    for v in dep.get('vulns', []):
-        sev = str(v.get('severity') or v.get('cvss_severity') or '').lower()
-        if sev in {'high', 'critical'}:
-            issues.append((dep.get('name'), v.get('id'), sev))
-if issues:
-    print('High/Critical vulnerabilities found:', issues)
-    sys.exit(1)
-print('No High/Critical vulnerabilities detected by severity metadata.')
-PY
+          python -c "import json,sys; data=json.load(open('pip-audit.json', encoding='utf-8')); issues=[(dep.get('name'), v.get('id'), str(v.get('severity') or v.get('cvss_severity') or '').lower()) for dep in data.get('dependencies', []) for v in dep.get('vulns', []) if str(v.get('severity') or v.get('cvss_severity') or '').lower() in {'high','critical'}]; print('High/Critical vulnerabilities found:', issues) if issues else print('No High/Critical vulnerabilities detected by severity metadata.'); sys.exit(1 if issues else 0)"
       - name: Django deploy checks
         run: python manage.py check --deploy
       - name: Run tests
         run: pytest -q
+
+
+
+

@@ -57,7 +57,75 @@ export async function logout(): Promise<void> {
   }
 }
 
-export function googleLogin(): void {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-  window.location.href = `${base}/oauth/`;
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential?: string }) => void;
+            ux_mode?: 'popup' | 'redirect';
+          }) => void;
+          prompt: () => void;
+        };
+      };
+    };
+  }
+}
+
+function loadGoogleIdentityScript(): Promise<void> {
+  if (window.google?.accounts?.id) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-google-identity="true"]') as HTMLScriptElement | null;
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('Failed to load Google script')), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleIdentity = 'true';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Google script'));
+    document.head.appendChild(script);
+  });
+}
+
+export async function googleLogin(): Promise<void> {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    throw new Error('Missing VITE_GOOGLE_CLIENT_ID');
+  }
+
+  await loadGoogleIdentityScript();
+
+  const idToken = await new Promise<string>((resolve, reject) => {
+    if (!window.google?.accounts?.id) {
+      reject(new Error('Google Identity SDK unavailable'));
+      return;
+    }
+
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      ux_mode: 'popup',
+      callback: (response) => {
+        if (!response.credential) {
+          reject(new Error('No Google credential received'));
+          return;
+        }
+        resolve(response.credential);
+      },
+    });
+    window.google.accounts.id.prompt();
+  });
+
+  const { data } = await api.post<TokenPair>('/oauth/', { id_token: idToken });
+  persistTokens(data.access, data.refresh);
 }
