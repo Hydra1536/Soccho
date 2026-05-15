@@ -94,6 +94,7 @@ SIMPLE_JWT = {
 EMAILJS_SERVICE_ID = os.getenv("EMAILJS_SERVICE_ID", "service_l3oeuqf")
 EMAILJS_TEMPLATE_ID = os.getenv("EMAILJS_TEMPLATE_ID", "template_60h0786")
 EMAILJS_PUBLIC_KEY = os.getenv("EMAILJS_PUBLIC_KEY", "selFN3purqbDa4wTj")
+EMAILJS_PRIVATE_KEY = os.getenv("EMAILJS_PRIVATE_KEY", "")
 
 ALLOWED_ORIGINS = [x.strip() for x in os.getenv("ALLOWED_ORIGINS", "").split(",") if x.strip()]
 

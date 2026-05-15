@@ -280,6 +280,7 @@ async def _send_otp_email_async(user_email: str, otp_code: str):
     service_id = getattr(settings, "EMAILJS_SERVICE_ID", "")
     template_id = getattr(settings, "EMAILJS_TEMPLATE_ID", "")
     public_key = getattr(settings, "EMAILJS_PUBLIC_KEY", "")
+    private_key = getattr(settings, "EMAILJS_PRIVATE_KEY", "")
     if not service_id or not template_id or not public_key:
         raise ValueError("email send failed")
 
@@ -292,6 +293,8 @@ async def _send_otp_email_async(user_email: str, otp_code: str):
             "passcode": otp_code,
         },
     }
+    if private_key:
+        payload["accessToken"] = private_key
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
@@ -307,6 +310,13 @@ async def _send_otp_email_async(user_email: str, otp_code: str):
                 timeout=15,
             )
             if response.status_code < 200 or response.status_code >= 300:
+                if (
+                    response.status_code == 403
+                    and "non-browser environments is currently disabled" in response.text.lower()
+                ):
+                    logger.error(
+                        "EmailJS blocked backend request. Enable non-browser API access in EmailJS dashboard security settings."
+                    )
                 raise ValueError(
                     f"status={response.status_code} body={response.text[:200]}"
                 )
