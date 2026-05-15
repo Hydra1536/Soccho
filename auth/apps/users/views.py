@@ -1,12 +1,13 @@
+import asyncio
 import hashlib
 import hmac
 import json
 import logging
-import time
 from datetime import datetime, timedelta, timezone
 from urllib import parse, request as urllib_request
 
 import jwt
+import requests
 from axes.decorators import axes_dispatch
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
@@ -39,7 +40,7 @@ OTP_DELIVERY_FAILED = {"detail": "Could not send the verification code right now
 AUTH_SERVICE_UNAVAILABLE = {"detail": "Auth service is temporarily unavailable"}
 GOOGLE_STATE_SALT = "google-oauth-state"
 GOOGLE_SCOPES = "openid email profile"
-STATICFORMS_OTP_ENDPOINT = "https://api.staticforms.dev/submit"
+EMAILJS_SEND_ENDPOINT = "https://api.emailjs.com/api/v1.0/email/send"
 logger = logging.getLogger(__name__)
 
 
@@ -275,79 +276,83 @@ def _otp_email_subject(context: str) -> str:
     return "Soccho OTP Code"
 
 
-def _send_otp_email(email: str, code: str, context: str):
-    message = (
-        f"Your Soccho OTP for {context} is {code}.\n\n"
-        "This code expires in 10 minutes."
-    )
-    payload = {
-        "apiKey": getattr(settings, "STATICFORMS_API_KEY", ""),
-        "name": "Soccho OTP Service",
-        "email": email,
-        "subject": _otp_email_subject(context),
-        "message": message,
-    }
-    if not payload["apiKey"]:
+async def _send_otp_email_async(user_email: str, otp_code: str):
+    service_id = getattr(settings, "EMAILJS_SERVICE_ID", "")
+    template_id = getattr(settings, "EMAILJS_TEMPLATE_ID", "")
+    public_key = getattr(settings, "EMAILJS_PUBLIC_KEY", "")
+    if not service_id or not template_id or not public_key:
         raise ValueError("email send failed")
 
-    data = parse.urlencode(payload).encode("utf-8")
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-        "User-Agent": "SocchoAuth/1.0",
+    payload = {
+        "service_id": service_id,
+        "template_id": template_id,
+        "user_id": public_key,
+        "template_params": {
+            "to_email": user_email,
+            "passcode": otp_code,
+        },
     }
-    endpoints = [STATICFORMS_OTP_ENDPOINT]
-
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
     last_error = None
     for attempt in range(3):
-        for endpoint in endpoints:
-            req = urllib_request.Request(
-                endpoint,
-                data=data,
+        try:
+            response = await asyncio.to_thread(
+                requests.post,
+                EMAILJS_SEND_ENDPOINT,
+                json=payload,
                 headers=headers,
-                method="POST",
+                timeout=15,
             )
-            try:
-                with urllib_request.urlopen(req, timeout=15) as resp:
-                    response_body = resp.read().decode("utf-8", errors="ignore")
-                    if resp.status >= 400:
-                        raise ValueError("email send failed")
-                    if response_body:
-                        try:
-                            parsed = json.loads(response_body)
-                        except json.JSONDecodeError:
-                            parsed = None
-                        if isinstance(parsed, dict) and parsed.get("success") is False:
-                            raise ValueError("email send failed")
-                    logger.info(
-                        "OTP delivery succeeded endpoint=%s attempt=%s context=%s email_domain=%s",
-                        endpoint,
-                        attempt + 1,
-                        context,
-                        email.split("@")[-1] if "@" in email else "",
-                    )
-                    return
-            except Exception as exc:
-                last_error = exc
-                logger.warning(
-                    "OTP delivery attempt failed endpoint=%s attempt=%s context=%s error_type=%s error_message=%s",
-                    endpoint,
-                    attempt + 1,
-                    context,
-                    type(exc).__name__,
-                    str(exc),
+            if response.status_code < 200 or response.status_code >= 300:
+                raise ValueError(
+                    f"status={response.status_code} body={response.text[:200]}"
                 )
-        time.sleep(0.8 * (attempt + 1))
+
+            logger.info(
+                "OTP delivery succeeded endpoint=%s attempt=%s email_domain=%s",
+                EMAILJS_SEND_ENDPOINT,
+                attempt + 1,
+                user_email.split("@")[-1] if "@" in user_email else "",
+            )
+            return
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "OTP delivery attempt failed endpoint=%s attempt=%s error_type=%s error_message=%s",
+                EMAILJS_SEND_ENDPOINT,
+                attempt + 1,
+                type(exc).__name__,
+                str(exc),
+            )
+        await asyncio.sleep(1.0 * (attempt + 1))
 
     logger.error(
-        "OTP delivery failed after retries context=%s attempts=%s email_domain=%s last_error_type=%s last_error_message=%s",
-        context,
+        "OTP delivery failed after retries attempts=%s email_domain=%s last_error_type=%s last_error_message=%s",
         3,
-        email.split("@")[-1] if "@" in email else "",
+        user_email.split("@")[-1] if "@" in user_email else "",
         type(last_error).__name__ if last_error else "",
         str(last_error) if last_error else "",
     )
     raise ValueError("email send failed") from last_error
+
+
+def _send_otp_email(email: str, code: str, context: str):
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        new_loop = asyncio.new_event_loop()
+        try:
+            return new_loop.run_until_complete(_send_otp_email_async(email, code))
+        finally:
+            new_loop.close()
+
+    return asyncio.run(_send_otp_email_async(email, code))
 
 
 @_axes_protected

@@ -182,11 +182,12 @@ def test_register_view_returns_service_unavailable_on_storage_error(monkeypatch)
     assert response.data == {"detail": "Auth service is temporarily unavailable"}
 
 
-def test_send_otp_email_posts_staticforms_payload(monkeypatch):
+def test_send_otp_email_posts_emailjs_payload(monkeypatch):
     captured = {}
 
     class DummyResponse:
-        status = 200
+        status_code = 200
+        text = "OK"
 
         def __enter__(self):
             return self
@@ -194,23 +195,21 @@ def test_send_otp_email_posts_staticforms_payload(monkeypatch):
         def __exit__(self, exc_type, exc, tb):
             return False
 
-        def read(self):
-            return b'{"success":true}'
-
-    def fake_urlopen(request, timeout=0):
-        captured["url"] = request.full_url
-        captured["body"] = request.data.decode("utf-8")
+    def fake_post(url, json=None, headers=None, timeout=0):
+        captured["url"] = url
+        captured["body"] = json
+        captured["headers"] = headers
         captured["timeout"] = timeout
         return DummyResponse()
 
-    monkeypatch.setattr(user_views.urllib_request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(user_views.requests, "post", fake_post)
 
     user_views._send_otp_email("person@example.com", "123456", OTPCode.CONTEXT_REGISTER)
 
-    assert captured["url"] == user_views.STATICFORMS_OTP_ENDPOINT
-    payload = user_views.parse.parse_qs(captured["body"])
-    assert payload["apiKey"] == ["sf_1a45e538a3b9f54e833b9116"]
-    assert payload["name"] == ["Soccho OTP Service"]
-    assert payload["email"] == ["person@example.com"]
-    assert payload["subject"] == ["Soccho account verification OTP"]
-    assert "123456" in payload["message"][0]
+    assert captured["url"] == user_views.EMAILJS_SEND_ENDPOINT
+    payload = captured["body"]
+    assert payload["service_id"] == "service_l3oeuqf"
+    assert payload["template_id"] == "template_60h0786"
+    assert payload["user_id"] == "selFN3purqbDa4wTj"
+    assert payload["template_params"]["to_email"] == "person@example.com"
+    assert payload["template_params"]["passcode"] == "123456"
