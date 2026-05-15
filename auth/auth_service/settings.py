@@ -11,6 +11,7 @@ load_dotenv(BASE_DIR / ".env")
 SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "dev-auth-secret-key")
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 ALLOWED_HOSTS = ["*"]
+AXES_ENABLED = os.getenv("AXES_ENABLED", "false").lower() == "true"
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -100,14 +101,27 @@ SIMPLE_JWT = {
 
 ALLOWED_ORIGINS = [x.strip() for x in os.getenv("ALLOWED_ORIGINS", "").split(",") if x.strip()]
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": os.getenv("REDIS_CACHE_URL", "redis://redis:6379/0"),
-    }
-}
 
-AXES_ENABLED = True
+def _cache_config():
+    redis_cache_url = os.getenv("REDIS_CACHE_URL", "").strip()
+    if AXES_ENABLED and redis_cache_url:
+        return {
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": redis_cache_url,
+            }
+        }
+
+    return {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "soccho-auth-cache",
+        }
+    }
+
+
+CACHES = _cache_config()
+
 AXES_FAILURE_LIMIT = 100
 AXES_COOLOFF_TIME = timedelta(hours=1)
 AXES_LOCK_OUT_AT_FAILURE = True

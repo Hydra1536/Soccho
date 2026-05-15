@@ -38,6 +38,12 @@ class PublicEndpointMixin:
     throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
 
+def _axes_protected(view_cls):
+    if not getattr(settings, "AXES_ENABLED", False):
+        return view_cls
+    return method_decorator(axes_dispatch, name="dispatch")(view_cls)
+
+
 def _hash_token(token: str) -> str:
     key = settings.SECRET_KEY.encode("utf-8")
     return hmac.new(key, token.encode("utf-8"), hashlib.sha256).hexdigest()
@@ -231,7 +237,7 @@ def _send_otp_email(email: str, code: str, context: str):
         raise ValueError("email send failed")
 
 
-@method_decorator(axes_dispatch, name="dispatch")
+@_axes_protected
 class RegisterView(PublicEndpointMixin, APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -260,7 +266,7 @@ class RegisterView(PublicEndpointMixin, APIView):
         return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)
 
 
-@method_decorator(axes_dispatch, name="dispatch")
+@_axes_protected
 class LoginView(PublicEndpointMixin, APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -401,7 +407,7 @@ class GoogleOAuthCallbackView(PublicEndpointMixin, APIView):
         return _redirect_to_frontend(frontend_origin, access_token=access, refresh_token=refresh)
 
 
-@method_decorator(axes_dispatch, name="dispatch")
+@_axes_protected
 class ForgotPasswordView(PublicEndpointMixin, APIView):
     def post(self, request):
         serializer = ForgotPasswordSerializer(data=request.data)
@@ -418,7 +424,7 @@ class ForgotPasswordView(PublicEndpointMixin, APIView):
         return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)
 
 
-@method_decorator(axes_dispatch, name="dispatch")
+@_axes_protected
 class ChangePasswordView(PublicEndpointMixin, APIView):
     def post(self, request):
         serializer = ChangePasswordSerializer(data=request.data)

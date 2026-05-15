@@ -8,7 +8,39 @@ pytest.importorskip("axes")
 from apps.users import views
 
 
-def test_register_view_accepts_drf_request_with_axes_dispatch(monkeypatch):
+def test_axes_protected_skips_decoration_when_disabled(settings):
+    settings.AXES_ENABLED = False
+
+    class DummyView:
+        pass
+
+    assert views._axes_protected(DummyView) is DummyView
+
+
+def test_axes_protected_applies_decoration_when_enabled(monkeypatch, settings):
+    settings.AXES_ENABLED = True
+
+    def fake_method_decorator(_decorator, name):
+        assert name == "dispatch"
+
+        def apply(view_cls):
+            view_cls.axes_wrapped = True
+            return view_cls
+
+        return apply
+
+    monkeypatch.setattr(views, "method_decorator", fake_method_decorator)
+
+    class DummyView:
+        pass
+
+    wrapped = views._axes_protected(DummyView)
+
+    assert wrapped is DummyView
+    assert wrapped.axes_wrapped is True
+
+
+def test_register_view_accepts_drf_request_without_axes(monkeypatch):
     def fake_get_or_create(*_args, **_kwargs):
         return SimpleNamespace(id="user-1", username="reza"), True
 

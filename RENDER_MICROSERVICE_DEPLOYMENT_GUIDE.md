@@ -306,6 +306,7 @@ Set these on every backend service that needs them:
 - `CELERY_RESULT_BACKEND=<Render Key Value internal URL>/1`
 - `CHANNEL_LAYERS_REDIS_URL=<Render Key Value internal URL>/2`
 - `ALLOWED_ORIGINS=https://soccho-frontend.onrender.com,https://soccho-gateway.onrender.com`
+- `AXES_ENABLED=false`
 
 And the service secrets:
 
