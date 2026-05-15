@@ -8,20 +8,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.grpc_client.auth_client import auth_client
-
-UNPROTECTED_PREFIXES = (
-    '/health',
-    '/api/auth/login',
-    '/api/auth/register',
-    '/api/auth/refresh',
-    '/api/auth/forgot-password',
-    '/oauth',
-    '/oauth/',
-)
-
-
-def _is_unprotected(path: str) -> bool:
-    return any(path.startswith(prefix) for prefix in UNPROTECTED_PREFIXES)
+from app.middleware.auth_exemptions import should_skip_auth
 
 
 class JWTValidationMiddleware(BaseHTTPMiddleware):
@@ -32,7 +19,7 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
         self.cache_ttl_seconds = 30
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Any]]):
-        if _is_unprotected(request.url.path):
+        if should_skip_auth(request.method, request.url.path):
             return await call_next(request)
 
         auth_header = request.headers.get('Authorization', '')
