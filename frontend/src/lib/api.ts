@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://soccho-gateway.onrender.com';
+export const API_URL = import.meta.env.VITE_API_URL || 'https://soccho-gateway.onrender.com';
 
 export const ACCESS_TOKEN_KEY = 'access_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';

@@ -41,6 +41,9 @@ async def _forward_request(target_base: str, suffix: str, request: Request) -> R
 
     headers = dict(request.headers)
     headers.pop('host', None)
+    headers['x-forwarded-proto'] = request.url.scheme
+    if request.headers.get('host'):
+        headers['x-forwarded-host'] = request.headers['host']
     user_id = getattr(request.state, 'user_id', '')
     if user_id:
         headers['x-user-id'] = user_id

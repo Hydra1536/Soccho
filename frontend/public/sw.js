@@ -5,7 +5,21 @@ const DB_NAME = 'soccho-offline';
 const STORE = 'tx-queue';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(['/home'])));
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        const appShell = await fetch('/', { cache: 'no-cache' });
+        if (!appShell.ok) {
+          return;
+        }
+        await cache.put('/', appShell.clone());
+        await cache.put('/home', appShell.clone());
+      } catch {
+        // Do not fail the service worker install when the shell cannot be prefetched.
+      }
+    })()
+  );
 });
 
 self.addEventListener('activate', (event) => {

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
 import { googleLogin, login, register, verifyOTP, OTPContext } from '../../lib/auth';
+import { persistTokens } from '../../lib/api';
 
 type AuthScreen = 'login' | 'register' | 'otp';
 
@@ -19,6 +20,28 @@ export default function Login() {
   const [otpContext, setOtpContext] = useState<OTPContext>('register');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const accessToken = hash.get('access_token');
+    const refreshToken = hash.get('refresh_token');
+    const googleError = hash.get('google_error');
+    if (!accessToken && !refreshToken && !googleError) {
+      return;
+    }
+
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+
+    if (accessToken && refreshToken) {
+      persistTokens(accessToken, refreshToken);
+      navigate('/home', { replace: true });
+      return;
+    }
+
+    if (googleError) {
+      setError(googleError);
+    }
+  }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,17 +90,10 @@ export default function Login() {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = () => {
     setError(null);
     setLoading(true);
-    try {
-      await googleLogin();
-      navigate('/home');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google login failed');
-    } finally {
-      setLoading(false);
-    }
+    void googleLogin();
   };
 
   const slideVariants = {
