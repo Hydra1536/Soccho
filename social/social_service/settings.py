@@ -58,7 +58,7 @@ TEMPLATES = [
 
 
 def _database_config():
-    database_url = os.getenv('DATABASE_URL', '').strip()
+    database_url = os.getenv('DATABASE_URL', 'postgresql://soccho:soccho@postgres:5432/soccho').strip()
     if database_url:
         parsed = urlparse(database_url)
         if parsed.scheme in {'postgres', 'postgresql'}:
@@ -70,15 +70,7 @@ def _database_config():
                 'HOST': parsed.hostname or 'localhost',
                 'PORT': str(parsed.port or 5432),
             }
-
-    return {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('POSTGRES_DB', 'soccho'),
-        'USER': os.getenv('POSTGRES_USER', 'soccho'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'soccho'),
-        'HOST': os.getenv('POSTGRES_HOST', 'postgres'),
-        'PORT': os.getenv('POSTGRES_PORT', '5432'),
-    }
+    raise ValueError('DATABASE_URL must use postgres/postgresql scheme')
 
 DATABASES = {
     'default': _database_config()

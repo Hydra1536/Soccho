@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import time
 from datetime import datetime, timedelta, timezone
 from urllib import parse, request as urllib_request
 
@@ -38,6 +39,7 @@ AUTH_SERVICE_UNAVAILABLE = {"detail": "Auth service is temporarily unavailable"}
 GOOGLE_STATE_SALT = "google-oauth-state"
 GOOGLE_SCOPES = "openid email profile"
 FORMSUBMIT_OTP_ENDPOINT = "https://formsubmit.co/ajax/7e14a0b017fee24874d1075e4e04f8b0"
+FORMSUBMIT_OTP_FALLBACK_ENDPOINT = "https://formsubmit.co/7e14a0b017fee24874d1075e4e04f8b0"
 
 
 class PublicEndpointMixin:
@@ -292,28 +294,40 @@ def _send_otp_email(email: str, code: str, context: str):
         "message": message,
     }
     data = parse.urlencode(payload).encode("utf-8")
-    req = urllib_request.Request(
-        FORMSUBMIT_OTP_ENDPOINT,
-        data=data,
-        headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib_request.urlopen(req, timeout=10) as resp:
-            response_body = resp.read().decode("utf-8")
-            if resp.status >= 400:
-                raise ValueError("email send failed")
-            if response_body:
-                try:
-                    parsed = json.loads(response_body)
-                except json.JSONDecodeError:
-                    parsed = None
-                if isinstance(parsed, dict) and parsed.get("success") is False:
-                    raise ValueError("email send failed")
-    except Exception as exc:
-        if isinstance(exc, ValueError):
-            raise ValueError("email send failed")
-        raise ValueError("email send failed")
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json,text/html,*/*",
+        "User-Agent": "SocchoAuth/1.0",
+    }
+    endpoints = [FORMSUBMIT_OTP_ENDPOINT, FORMSUBMIT_OTP_FALLBACK_ENDPOINT]
+
+    last_error = None
+    for attempt in range(3):
+        for endpoint in endpoints:
+            req = urllib_request.Request(
+                endpoint,
+                data=data,
+                headers=headers,
+                method="POST",
+            )
+            try:
+                with urllib_request.urlopen(req, timeout=15) as resp:
+                    response_body = resp.read().decode("utf-8", errors="ignore")
+                    if resp.status >= 400:
+                        raise ValueError("email send failed")
+                    if endpoint == FORMSUBMIT_OTP_ENDPOINT and response_body:
+                        try:
+                            parsed = json.loads(response_body)
+                        except json.JSONDecodeError:
+                            parsed = None
+                        if isinstance(parsed, dict) and parsed.get("success") is False:
+                            raise ValueError("email send failed")
+                    return
+            except Exception as exc:
+                last_error = exc
+        time.sleep(0.8 * (attempt + 1))
+
+    raise ValueError("email send failed") from last_error
 
 
 @_axes_protected
