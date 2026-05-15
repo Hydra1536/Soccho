@@ -18,15 +18,19 @@ class VerifyOTPView(APIView):
     throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
     def post(self, request):
+        email = request.data.get("email")
         username = request.data.get("username")
         code = request.data.get("code")
         context = request.data.get("context")
 
-        if not username or not code or not context:
+        if (not email and not username) or not code or not context:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            user = User.objects.get(username=username)
+            if email:
+                user = User.objects.get(email=email)
+            else:
+                user = User.objects.get(username=username)
         except User.DoesNotExist:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 

@@ -119,7 +119,7 @@ class LoginView(PublicEndpointMixin, APIView):
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            user = User.objects.get(username=serializer.validated_data["username"])
+            user = User.objects.get(email=serializer.validated_data["email"])
         except User.DoesNotExist:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -245,12 +245,8 @@ class ChangePasswordView(PublicEndpointMixin, APIView):
         if not serializer.is_valid():
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
-        username = request.data.get("username")
-        if not username:
-            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
-
         try:
-            user = User.objects.get(username=username)
+            user = User.objects.get(email=serializer.validated_data["email"])
         except User.DoesNotExist:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 

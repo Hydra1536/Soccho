@@ -9,7 +9,7 @@ import { requestChangePassword, verifyOTP } from '../../lib/auth';
 export default function ChangePassword() {
   const navigate = useNavigate();
   const [step, setStep] = useState<'request' | 'otp'>('request');
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -22,7 +22,7 @@ export default function ChangePassword() {
     setLoading(true);
     setError(null);
     try {
-      await requestChangePassword(username, oldPassword, newPassword, confirmPassword);
+      await requestChangePassword(email, oldPassword, newPassword, confirmPassword);
       setStep('otp');
     } catch {
       setError('Unable to request password change');
@@ -35,7 +35,7 @@ export default function ChangePassword() {
     setLoading(true);
     setError(null);
     try {
-      await verifyOTP(username, otp, 'change_pw');
+      await verifyOTP(email, otp, 'change_pw');
       navigate('/home');
     } catch {
       setError('Invalid credentials');
@@ -63,7 +63,7 @@ export default function ChangePassword() {
 
         {step === 'request' ? (
           <form onSubmit={submitRequest} className="space-y-4">
-            <Input type="text" label="Username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+            <Input type="email" label="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <Input type="password" label="Current Password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} required />
             <Input type="password" label="New Password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
             <Input type="password" label="Confirm New Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />

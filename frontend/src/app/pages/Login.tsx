@@ -25,7 +25,7 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      await login(username, password);
+      await login(email, password);
       navigate('/home');
     } catch {
       setError('Invalid credentials');
@@ -58,7 +58,7 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      await verifyOTP(username, otpCode, otpContext);
+      await verifyOTP(email, otpCode, otpContext);
       navigate('/home');
     } catch {
       setError('Invalid credentials');
@@ -138,11 +138,11 @@ export default function Login() {
               >
                 <form onSubmit={handleLogin} className="space-y-4">
                   <Input
-                    type="text"
-                    label="Username"
-                    placeholder="your_username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    type="email"
+                    label="Email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
                   />
 

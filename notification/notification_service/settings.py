@@ -86,5 +86,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_SECRET_KEY = os.getenv('AUTH_SECRET_KEY', SECRET_KEY)
 TRANSACTION_HTTP_BASE_URL = os.getenv(
     'TRANSACTION_HTTP_BASE_URL',
-    f"http://{os.getenv('TRANSACTION_GRPC_HOST', 'transaction')}:{os.getenv('TRANSACTION_GRPC_PORT', '8003')}",
+    'https://soccho-transaction.onrender.com',
 )

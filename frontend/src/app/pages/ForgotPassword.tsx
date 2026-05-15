@@ -10,7 +10,6 @@ export default function ForgotPassword() {
   const navigate = useNavigate();
   const [step, setStep] = useState<'email' | 'otp'>('email');
   const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +32,7 @@ export default function ForgotPassword() {
     setLoading(true);
     setError(null);
     try {
-      await verifyOTP(username, otp, 'forgot');
+      await verifyOTP(email, otp, 'forgot');
       navigate('/home');
     } catch {
       setError('Invalid credentials');
@@ -67,14 +66,6 @@ export default function ForgotPassword() {
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <Input
-              type="text"
-              label="Username"
-              placeholder="your_username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
               required
             />
             <Button fullWidth type="submit" disabled={loading}>

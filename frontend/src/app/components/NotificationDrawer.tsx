@@ -20,6 +20,9 @@ interface NotificationDrawerProps {
 
 function toWsUrl(httpUrl: string): string {
   const url = new URL(httpUrl);
+  if (url.protocol === 'ws:' || url.protocol === 'wss:') {
+    return `${url.protocol}//${url.host}`;
+  }
   const scheme = url.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${scheme}//${url.host}`;
 }
@@ -42,7 +45,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     const token = localStorage.getItem('access_token');
     if (!token) return;
 
-    const base = import.meta.env.VITE_NOTIFICATION_WS_URL || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const base = import.meta.env.VITE_NOTIFICATION_WS_URL || import.meta.env.VITE_API_URL || 'https://soccho-notification.onrender.com';
     const wsBase = toWsUrl(base);
     const ws = new WebSocket(`${wsBase}/ws/notifications/?token=${encodeURIComponent(token)}`);
     wsRef.current = ws;

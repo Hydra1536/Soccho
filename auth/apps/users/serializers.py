@@ -18,11 +18,12 @@ class RegisterSerializer(serializers.Serializer):
 
 
 class LoginSerializer(serializers.Serializer):
-    username = serializers.CharField(max_length=30)
+    email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
 
 
 class ChangePasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
     old_password = serializers.CharField(write_only=True)
     new_password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True, min_length=8)

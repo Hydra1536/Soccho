@@ -26,18 +26,18 @@ class Settings(BaseSettings):
 
     auth_grpc_host: str = Field(default='auth', alias='AUTH_GRPC_HOST')
     auth_grpc_port: int = Field(default=8001, alias='AUTH_GRPC_PORT')
-    auth_http_base_url: str = Field(default='http://auth:8001', alias='AUTH_HTTP_BASE_URL')
+    auth_http_base_url: str = Field(default='https://soccho-auth.onrender.com', alias='AUTH_HTTP_BASE_URL')
     social_grpc_host: str = Field(default='social', alias='SOCIAL_GRPC_HOST')
     social_grpc_port: int = Field(default=8002, alias='SOCIAL_GRPC_PORT')
-    social_http_base_url: str = Field(default='http://social:8002', alias='SOCIAL_HTTP_BASE_URL')
+    social_http_base_url: str = Field(default='https://soccho-social.onrender.com', alias='SOCIAL_HTTP_BASE_URL')
     transaction_grpc_host: str = Field(default='transaction', alias='TRANSACTION_GRPC_HOST')
     transaction_grpc_port: int = Field(default=8003, alias='TRANSACTION_GRPC_PORT')
-    transaction_http_base_url: str = Field(default='http://transaction:8003', alias='TRANSACTION_HTTP_BASE_URL')
+    transaction_http_base_url: str = Field(default='https://soccho-transaction.onrender.com', alias='TRANSACTION_HTTP_BASE_URL')
     notification_grpc_host: str = Field(default='notification', alias='NOTIFICATION_GRPC_HOST')
     notification_grpc_port: int = Field(default=8004, alias='NOTIFICATION_GRPC_PORT')
-    notification_http_base_url: str = Field(default='http://notification:8004', alias='NOTIFICATION_HTTP_BASE_URL')
+    notification_http_base_url: str = Field(default='https://soccho-notification.onrender.com', alias='NOTIFICATION_HTTP_BASE_URL')
 
-    allowed_origins_raw: str = Field(default='http://localhost:3000', alias='ALLOWED_ORIGINS')
+    allowed_origins_raw: str = Field(default='https://soccho.onrender.com,https://soccho.vercel.app', alias='ALLOWED_ORIGINS')
     admin_url_path: str = Field(default='/admin', alias='ADMIN_URL_PATH')
 
     @property

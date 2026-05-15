@@ -7,8 +7,8 @@ type TokenPair = {
   refresh: string;
 };
 
-export async function login(username: string, password: string): Promise<void> {
-  const { data } = await api.post<TokenPair>('/api/auth/login/', { username, password });
+export async function login(email: string, password: string): Promise<void> {
+  const { data } = await api.post<TokenPair>('/api/auth/login/', { email, password });
   persistTokens(data.access, data.refresh);
 }
 
@@ -22,9 +22,9 @@ export async function register(username: string, email: string, password: string
   return data;
 }
 
-export async function verifyOTP(username: string, code: string, context: OTPContext): Promise<void> {
+export async function verifyOTP(email: string, code: string, context: OTPContext): Promise<void> {
   const { data } = await api.post<TokenPair>('/api/auth/otp/verify/', {
-    username,
+    email,
     code,
     context,
   });
@@ -36,9 +36,9 @@ export async function forgotPassword(email: string): Promise<{ message: string }
   return data;
 }
 
-export async function requestChangePassword(username: string, old_password: string, new_password: string, confirm_password: string): Promise<{ message: string }> {
+export async function requestChangePassword(email: string, old_password: string, new_password: string, confirm_password: string): Promise<{ message: string }> {
   const { data } = await api.post<{ message: string }>('/api/auth/change-password/request/', {
-    username,
+    email,
     old_password,
     new_password,
     confirm_password,

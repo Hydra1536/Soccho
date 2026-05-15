@@ -1,597 +1,390 @@
-# Soccho API Testing Playbook (Copy/Paste Ready)
+# Soccho Production API Testing Guide (Render)
 
-Use this file as an executable checklist.
-Replace placeholders like `<GATEWAY_URL>`, `<ACCESS_TOKEN>`, `<UUID>`.
+This guide is copy-paste ready for production testing on **Friday, May 15, 2026**.
 
-## 0) Base Setup
+## Production URLs
 
-```bash
-# PowerShell examples use these env vars first
-$env:GATEWAY_URL = "http://localhost:8000"
-# Render example:
-# $env:GATEWAY_URL = "https://soccho-gateway.onrender.com"
+- Frontend (Render): `https://soccho.onrender.com`
+- Frontend (Vercel): `https://soccho.vercel.app`
+- Gateway: `https://soccho-gateway.onrender.com`
+- Auth (direct): `https://soccho-auth.onrender.com`
+- Social (direct): `https://soccho-social.onrender.com`
+- Transaction (direct): `https://soccho-transaction.onrender.com`
+- Notification WS: `wss://soccho-notification.onrender.com`
+
+## Quick Setup
+
+### PowerShell
+
+```powershell
+$env:GATEWAY_URL = "https://soccho-gateway.onrender.com"
+$env:AUTH_URL = "https://soccho-auth.onrender.com"
+$env:SOCIAL_URL = "https://soccho-social.onrender.com"
+$env:TRANSACTION_URL = "https://soccho-transaction.onrender.com"
+$env:WS_URL = "wss://soccho-notification.onrender.com"
 ```
 
-Headers used often:
-- `Authorization: Bearer <ACCESS_TOKEN>`
-- `Content-Type: application/json`
-- `X-Service: transaction` (for GraphQL routed via Gateway)
+### Bash
 
----
-
-## 1) Gateway Health
-
-### Request
 ```bash
-curl "$env:GATEWAY_URL/health"
+export GATEWAY_URL="https://soccho-gateway.onrender.com"
+export AUTH_URL="https://soccho-auth.onrender.com"
+export SOCIAL_URL="https://soccho-social.onrender.com"
+export TRANSACTION_URL="https://soccho-transaction.onrender.com"
+export WS_URL="wss://soccho-notification.onrender.com"
 ```
 
-### Expected Response (200)
-```json
-{"status":"ok"}
+## 1) Health Checks
+
+```bash
+curl "$GATEWAY_URL/health"
+curl "$SOCIAL_URL/health/"
+curl "$TRANSACTION_URL/health/"
 ```
 
----
+Expected:
 
-## 2) Auth Service (via Gateway)
+- `200 OK`
+- JSON like `{"status":"ok"}`
 
-## 2.1 Register
-### Request
+## 2) Auth Flow (Email + Password)
+
+Important: login is now **email + password** (not username).
+
+### 2.1 Register
+
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/auth/register/" \
+curl -X POST "$GATEWAY_URL/api/auth/register/" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "test_user_01",
     "email": "test01@example.com",
-    "password": "StrongPass123!",
-    "confirm_password": "StrongPass123!"
+    "password": "Passw0rd!234",
+    "confirm_password": "Passw0rd!234"
   }'
 ```
 
-### Expected Response (200)
-```json
-{"message":"OTP sent successfully"}
-```
+Expected:
 
----
+- `200 OK`
+- `{"message":"OTP sent successfully"}`
 
-## 2.2 Verify OTP (register context)
-### Request
+### 2.2 Verify OTP (register)
+
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/auth/otp/verify/" \
+curl -X POST "$GATEWAY_URL/api/auth/otp/verify/" \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "test_user_01",
+    "email": "test01@example.com",
     "code": "123456",
     "context": "register"
   }'
 ```
 
-### Expected Response (200)
-```json
-{
-  "access": "<jwt_access>",
-  "refresh": "<jwt_refresh>"
-}
-```
+Expected:
 
----
+- `200 OK`
+- `{"access":"<jwt>","refresh":"<jwt>"}`
 
-## 2.3 Login
-### Request
+### 2.3 Login (email + password)
+
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/auth/login/" \
+curl -X POST "$GATEWAY_URL/api/auth/login/" \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "test_user_01",
-    "password": "StrongPass123!"
+    "email": "test01@example.com",
+    "password": "Passw0rd!234"
   }'
 ```
 
-### Expected Response (200)
-```json
-{
-  "access": "<jwt_access>",
-  "refresh": "<jwt_refresh>"
-}
-```
+Expected:
 
----
+- `200 OK`
+- `{"access":"<jwt>","refresh":"<jwt>"}`
 
-## 2.4 Refresh Token Rotation
-### Request
+### 2.4 Refresh
+
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/auth/refresh/" \
+curl -X POST "$GATEWAY_URL/api/auth/refresh/" \
   -H "Content-Type: application/json" \
-  -d '{"refresh":"<OLD_REFRESH_TOKEN>"}'
+  -d '{"refresh":"<REFRESH_TOKEN>"}'
 ```
 
-### Expected Response (200)
-```json
-{
-  "access": "<new_access>",
-  "refresh": "<new_refresh>"
-}
-```
+Expected:
 
-### Rotation validation
-- Reusing `OLD_REFRESH_TOKEN` again should fail (401).
+- `200 OK`
+- New token pair JSON
 
-Expected failure body:
-```json
-{"detail":"Invalid credentials"}
-```
+### 2.5 Forgot Password (request OTP)
 
----
-
-## 2.5 Forgot Password (send OTP)
-### Request
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/auth/forgot-password/" \
+curl -X POST "$GATEWAY_URL/api/auth/forgot-password/" \
   -H "Content-Type: application/json" \
   -d '{"email":"test01@example.com"}'
 ```
 
-### Expected Response (200)
-```json
-{"message":"OTP sent successfully"}
-```
+Expected:
 
----
+- `200 OK`
+- `{"message":"OTP sent successfully"}`
 
-## 2.6 Verify OTP (forgot context)
-### Request
+### 2.6 Change Password Request (email + old/new password)
+
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/auth/otp/verify/" \
+curl -X POST "$GATEWAY_URL/api/auth/change-password/request/" \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "test_user_01",
+    "email":"test01@example.com",
+    "old_password":"Passw0rd!234",
+    "new_password":"N3wPassw0rd!456",
+    "confirm_password":"N3wPassw0rd!456"
+  }'
+```
+
+Expected:
+
+- `200 OK`
+- `{"message":"Password changed successfully"}`
+
+### 2.7 Verify OTP (forgot or change password)
+
+```bash
+curl -X POST "$GATEWAY_URL/api/auth/otp/verify/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test01@example.com",
     "code": "123456",
     "context": "forgot"
   }'
 ```
 
-### Expected Response (200)
-```json
-{
-  "access": "<jwt_access>",
-  "refresh": "<jwt_refresh>"
-}
-```
+Expected:
 
----
+- `200 OK`
+- `{"access":"<jwt>","refresh":"<jwt>"}`
 
-## 2.7 Change Password Request
-### Request (use your actual backend path if different)
+### 2.8 Logout
+
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/auth/change-password/request/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "test_user_01",
-    "old_password": "StrongPass123!",
-    "new_password": "NewStrongPass123!",
-    "confirm_password": "NewStrongPass123!"
-  }'
-```
-
-### Expected Response (200)
-```json
-{"message":"Password changed successfully"}
-```
-
-If your backend uses `/api/auth/change-password/`, call that path instead.
-
----
-
-## 2.8 Logout
-### Request
-```bash
-curl -X POST "$env:GATEWAY_URL/api/auth/logout/" \
+curl -X POST "$GATEWAY_URL/api/auth/logout/" \
   -H "Content-Type: application/json" \
   -d '{"refresh":"<REFRESH_TOKEN>"}'
 ```
 
-### Expected Response
+Expected:
+
 - `204 No Content`
 
----
+## 3) Social APIs
 
-## 2.9 Standard auth failure body (all auth errors)
-### Expected
-```json
-{"detail":"Invalid credentials"}
+Use a valid access token:
+
+```bash
+export ACCESS_TOKEN="<ACCESS_TOKEN>"
 ```
 
----
+### 3.1 Send Friend Request
 
-## 3) Social Service (via Gateway)
-
-## 3.1 Send Friend Request
-### Request
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/social/send-request/" \
-  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+curl -X POST "$GATEWAY_URL/api/social/send-request/" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"user_id":"<FRIEND_USER_UUID>"}'
+  -d '{"user_id":"11111111-1111-1111-1111-111111111111"}'
 ```
 
-### Expected Response (201)
-```json
-{
-  "id": 1,
-  "requester_id": "<uuid>",
-  "addressee_id": "<uuid>",
-  "status": "pending",
-  "created_at": "<iso>",
-  "updated_at": "<iso>"
-}
-```
+Expected:
 
----
+- `201 Created`
+- Friendship object with `status: "pending"`
 
-## 3.2 Accept Friend Request
-### Request
+### 3.2 Accept Friend Request
+
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/social/accept/" \
-  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+curl -X POST "$GATEWAY_URL/api/social/accept/" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"user_id":"<REQUESTER_UUID>"}'
+  -d '{"user_id":"11111111-1111-1111-1111-111111111111"}'
 ```
 
-### Expected Response (200)
-```json
-{
-  "id": 1,
-  "requester_id": "<uuid>",
-  "addressee_id": "<uuid>",
-  "status": "accepted",
-  "created_at": "<iso>",
-  "updated_at": "<iso>"
-}
-```
+Expected:
 
----
+- `200 OK`
+- Friendship object with `status: "accepted"`
 
-## 3.3 Reject Friend Request
-### Request
+### 3.3 Reject Friend Request
+
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/social/reject/" \
-  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+curl -X POST "$GATEWAY_URL/api/social/reject/" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"user_id":"<REQUESTER_UUID>"}'
+  -d '{"user_id":"11111111-1111-1111-1111-111111111111"}'
 ```
 
-### Expected Response (200)
-```json
-{
-  "id": 1,
-  "requester_id": "<uuid>",
-  "addressee_id": "<uuid>",
-  "status": "rejected",
-  "created_at": "<iso>",
-  "updated_at": "<iso>"
-}
-```
+Expected:
 
----
+- `200 OK`
+- Friendship object with `status: "rejected"`
 
-## 3.4 List Friends (Cursor pagination)
-Use your current route (`/api/social/list/` or `/api/social/friends/`).
+### 3.4 List Friends
 
-### Request
 ```bash
-curl "$env:GATEWAY_URL/api/social/list/" \
-  -H "Authorization: Bearer <ACCESS_TOKEN>"
+curl "$GATEWAY_URL/api/social/list/" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
-### Expected Response (200)
-```json
-{
-  "next": null,
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "requester_id": "<uuid>",
-      "addressee_id": "<uuid>",
-      "status": "accepted",
-      "created_at": "<iso>",
-      "updated_at": "<iso>"
-    }
-  ]
-}
-```
+Expected:
 
----
+- `200 OK`
+- DRF paginated response with `results`
 
-## 3.5 Search Friends
-### Request
+### 3.5 Search Users
+
 ```bash
-curl "$env:GATEWAY_URL/api/social/search/?q=rahim" \
-  -H "Authorization: Bearer <ACCESS_TOKEN>"
+curl "$GATEWAY_URL/api/social/search/?q=rahim" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
-### Expected Response (200)
-```json
-{
-  "results": [
-    {"id":"<uuid>","username":"rahim"}
-  ]
-}
-```
+Expected:
 
----
+- `200 OK`
+- `{"results":[{"id":"<uuid>","username":"rahim","loyalty_score":<number>}...]}`
 
-## 3.6 Search History (Redis JSON strings)
-### Request
+### 3.6 Search History
+
 ```bash
-curl "$env:GATEWAY_URL/api/social/search/history/" \
-  -H "Authorization: Bearer <ACCESS_TOKEN>"
+curl "$GATEWAY_URL/api/social/search/history/" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
-### Expected Response (200)
-```json
-{
-  "history": [
-    "{\"query\":\"rahim\",\"ts\":1715611111}",
-    "{\"query\":\"fatima\",\"ts\":1715611100}"
-  ]
-}
-```
+Expected:
 
----
+- `200 OK`
+- `{"history":[...]} `
 
-## 4) Transaction Service (via Gateway)
+## 4) Transactions APIs
 
-## 4.1 Create Transaction (idempotent)
-### Request
+### 4.1 Create Transaction
+
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/transactions/" \
-  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+curl -X POST "$GATEWAY_URL/api/transactions/" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "lender_id": "<LENDER_UUID>",
-    "borrower_id": "<BORROWER_UUID>",
-    "friendship_id": "<FRIENDSHIP_UUID>",
-    "amount": 5000,
-    "due_date": "2026-06-30",
-    "idempotency_key": "<UUIDv4>"
+    "lender_id":"22222222-2222-2222-2222-222222222222",
+    "borrower_id":"33333333-3333-3333-3333-333333333333",
+    "friendship_id":"44444444-4444-4444-4444-444444444444",
+    "amount":"1500.00",
+    "due_date":"2026-12-31",
+    "idempotency_key":"txn-001"
   }'
 ```
 
-### Expected Response (201)
-```json
-{
-  "id": "<transaction_uuid>",
-  "lender_id": "<uuid>",
-  "borrower_id": "<uuid>",
-  "friendship_id": "<uuid>",
-  "amount": 5000,
-  "due_date": "2026-06-30",
-  "status": "pending",
-  "idempotency_key": "<UUIDv4>"
-}
-```
+Expected:
 
-### Duplicate idempotency key behavior
-- Same payload + same key should return existing transaction or conflict per implementation.
+- `201 Created` on first request
+- `200 OK` on safe retry with same `idempotency_key`
+- Transaction object with `status: "pending"`
 
----
+### 4.2 Confirm Transaction
 
-## 4.2 Confirm Transaction
-### Request
 ```bash
-curl -X POST "$env:GATEWAY_URL/api/transactions/<TRANSACTION_UUID>/confirm/" \
-  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+curl -X POST "$GATEWAY_URL/api/transactions/<TRANSACTION_ID>/confirm/" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "borrower_id": "<BORROWER_UUID>",
-    "expected_version": 0
+    "borrower_id":"33333333-3333-3333-3333-333333333333",
+    "expected_version":1
   }'
 ```
 
-### Expected Response (200)
-```json
-{
-  "id": "<transaction_uuid>",
-  "status": "confirmed"
-}
-```
+Expected:
 
-### Version conflict expected response (409)
-```json
-{"detail":"Version mismatch"}
-```
+- `200 OK` and `status: "confirmed"`
+- `404` if ID not found
+- `409` if already processed or version mismatch
 
----
+### 4.3 Resolve Transaction (notification action)
 
-## 5) GraphQL Through Gateway (Transaction routing)
-
-Always include:
-- `X-Service: transaction`
-- `Authorization` bearer token
-
-## 5.1 dashboardSummary
-### Request
 ```bash
-curl -X POST "$env:GATEWAY_URL/graphql/" \
-  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+curl -X POST "$GATEWAY_URL/api/transactions/<TRANSACTION_ID>/resolve/" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "borrower_id":"33333333-3333-3333-3333-333333333333",
+    "action":"agree"
+  }'
+```
+
+Expected:
+
+- `200 OK`
+- `action=agree` results in `status: "confirmed"`
+- `action=disagree` results in `status: "denied"`
+
+## 5) GraphQL via Gateway
+
+### 5.1 Social GraphQL Friend List
+
+```bash
+curl -X POST "$GATEWAY_URL/graphql/" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "X-Service: social" \
+  -d '{"query":"query FriendList { friendList { userId username loyaltyScore } }"}'
+```
+
+Expected:
+
+- `200 OK`
+- `{"data":{"friendList":[...]}}`
+
+### 5.2 Transaction GraphQL Example
+
+```bash
+curl -X POST "$GATEWAY_URL/graphql/" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
   -H "X-Service: transaction" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "query($userId: UUID!){ dashboardSummary(userId:$userId){ userId totalLent totalBorrowed totalConfirmed } }",
-    "variables": { "userId": "<USER_UUID>" }
-  }'
+  -d '{"query":"{ __typename }"}'
 ```
 
-### Expected Response (200)
-```json
-{
-  "data": {
-    "dashboardSummary": {
-      "userId": "<uuid>",
-      "totalLent": 10000.0,
-      "totalBorrowed": 4000.0,
-      "totalConfirmed": 3
-    }
-  }
-}
+Expected:
+
+- `200 OK` if GraphQL endpoint is reachable
+
+## 6) Notification WebSocket
+
+Connect:
+
+- `wss://soccho-notification.onrender.com/ws/notifications/?token=<ACCESS_TOKEN>`
+
+Browser console quick test:
+
+```javascript
+const token = "<ACCESS_TOKEN>";
+const ws = new WebSocket(`wss://soccho-notification.onrender.com/ws/notifications/?token=${encodeURIComponent(token)}`);
+ws.onopen = () => console.log("connected");
+ws.onmessage = (event) => console.log("message", event.data);
+ws.onerror = (event) => console.error("error", event);
+ws.onclose = () => console.log("closed");
 ```
 
----
+Expected:
 
-## 5.2 friendLedger
-### Request
-```bash
-curl -X POST "$env:GATEWAY_URL/graphql/" \
-  -H "Authorization: Bearer <ACCESS_TOKEN>" \
-  -H "X-Service: transaction" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "query($friendshipId: UUID!){ friendLedger(friendshipId:$friendshipId){ friendshipId netBalance transactions { id lenderId borrowerId friendshipId amount status dueDate } } }",
-    "variables": { "friendshipId": "<FRIENDSHIP_UUID>" }
-  }'
+- Successful connection if token is valid
+- Event payloads for transaction/notification events
+
+## 7) Fast Failure Checklist
+
+- `401 Invalid credentials`: bad/expired token or wrong login payload.
+- `400` on GraphQL proxy: missing `X-Service` header.
+- `404` on proxy route: wrong gateway path.
+- `409` in transactions: idempotency/version/state conflict.
+
+## 8) Required Frontend Env
+
+```env
+VITE_API_URL=https://soccho-gateway.onrender.com
+VITE_NOTIFICATION_WS_URL=wss://soccho-notification.onrender.com
+VITE_GOOGLE_CLIENT_ID=replace_google_client_id
 ```
-
-### Expected Response (200)
-```json
-{
-  "data": {
-    "friendLedger": {
-      "friendshipId": "<uuid>",
-      "netBalance": 6000.0,
-      "transactions": [
-        {
-          "id": "<tx_uuid>",
-          "lenderId": "<uuid>",
-          "borrowerId": "<uuid>",
-          "friendshipId": "<uuid>",
-          "amount": 5000.0,
-          "status": "confirmed",
-          "dueDate": "2026-06-30"
-        }
-      ]
-    }
-  }
-}
-```
-
----
-
-## 6) Notification WebSocket (through Gateway)
-
-## 6.1 Connect URL
-- Local: `ws://localhost:8000/ws/notifications/?token=<ACCESS_TOKEN>`
-- Render: `wss://<gateway-domain>/ws/notifications/?token=<ACCESS_TOKEN>`
-
-## 6.2 Incoming created message sample
-```json
-{
-  "event": "transaction.created",
-  "notification": {
-    "id": 10,
-    "recipient_id": "<uuid>",
-    "type": "lend_confirmation",
-    "payload": {
-      "transaction_id": "<tx_uuid>",
-      "amount": "5000"
-    },
-    "is_cleared": false,
-    "created_at": "2026-05-13T12:00:00Z"
-  }
-}
-```
-
-## 6.3 Send Agree
-```json
-{
-  "action": "agree",
-  "notification_id": "10"
-}
-```
-
-## 6.4 Send Disagree
-```json
-{
-  "action": "disagree",
-  "notification_id": "10"
-}
-```
-
-## 6.5 Expected WS error on downstream outage
-```json
-{"error":"Service Unavailable"}
-```
-
----
-
-## 7) Admin Service Security Checks
-
-## 7.1 Standard /admin blocked
-### Request
-```bash
-curl -i "<ADMIN_BASE_URL>/admin/"
-```
-
-### Expected
-- `404 Not Found`
-
-## 7.2 Obscured admin path
-### Request
-```bash
-curl -i "<ADMIN_BASE_URL>/119115131318115/"
-```
-
-### Expected
-- `200` (or `302` to login)
-
----
-
-## 8) Common Failure Responses
-
-Auth/security errors (expected everywhere in auth flow):
-```json
-{"detail":"Invalid credentials"}
-```
-
-Forbidden actions example:
-```json
-{"detail":"Forbidden"}
-```
-
-Not found example:
-```json
-{"detail":"Not found"}
-```
-
----
-
-## 9) Render Endpoint Writing Rules
-
-Frontend must call only Gateway public URL:
-- `VITE_API_URL=https://<gateway>.onrender.com`
-
-Then frontend endpoints become:
-- Auth: `https://<gateway>/api/auth/...`
-- Social: `https://<gateway>/api/social/...`
-- Transactions: `https://<gateway>/api/transactions/...`
-- GraphQL: `https://<gateway>/graphql/` + `X-Service: transaction`
-- WebSocket: `wss://<gateway>/ws/notifications/?token=<jwt>`
-
-No frontend code rewrite needed if `VITE_API_URL` is correct.
-
----
-
-## 10) Minimal End-to-End Smoke Flow
-
-1. Register -> receive OTP
-2. Verify OTP (register)
-3. Login -> store tokens
-4. Send friend request
-5. Accept friend request (other user)
-6. Create transaction (new idempotency key)
-7. Confirm transaction
-8. Query dashboardSummary
-9. Open websocket and verify notification push
-
-If all 9 pass, your core pipeline is healthy.
