@@ -15,6 +15,7 @@ UNPROTECTED_PREFIXES = (
     '/api/auth/register',
     '/api/auth/refresh',
     '/api/auth/forgot-password',
+    '/oauth',
     '/oauth/',
 )
 

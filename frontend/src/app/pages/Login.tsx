@@ -73,8 +73,8 @@ export default function Login() {
     try {
       await googleLogin();
       navigate('/home');
-    } catch {
-      setError('Google login failed');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Google login failed');
     } finally {
       setLoading(false);
     }

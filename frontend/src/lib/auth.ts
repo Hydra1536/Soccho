@@ -107,8 +107,35 @@ export async function googleLogin(): Promise<void> {
   await loadGoogleIdentityScript();
 
   const idToken = await new Promise<string>((resolve, reject) => {
+    let settled = false;
+    const timeout = window.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(new Error('Google sign-in timed out. Verify Google OAuth Authorized JavaScript origins for this domain.'));
+    }, 15000);
+
+    const resolveOnce = (credential: string) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      window.clearTimeout(timeout);
+      resolve(credential);
+    };
+
+    const rejectOnce = (reason: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      window.clearTimeout(timeout);
+      reject(reason);
+    };
+
     if (!window.google?.accounts?.id) {
-      reject(new Error('Google Identity SDK unavailable'));
+      rejectOnce(new Error('Google Identity SDK unavailable'));
       return;
     }
 
@@ -117,10 +144,10 @@ export async function googleLogin(): Promise<void> {
       ux_mode: 'popup',
       callback: (response) => {
         if (!response.credential) {
-          reject(new Error('No Google credential received'));
+          rejectOnce(new Error('No Google credential received'));
           return;
         }
-        resolve(response.credential);
+        resolveOnce(response.credential);
       },
     });
     window.google.accounts.id.prompt();

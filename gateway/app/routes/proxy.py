@@ -9,14 +9,14 @@ from app.config import get_settings
 router = APIRouter()
 
 
-def _service_bases() -> Dict[str, str]:
+def _service_routes() -> Dict[str, tuple[str, str]]:
     settings = get_settings()
     return {
-        '/api/auth/': settings.auth_http_base_url,
-        '/api/social/': settings.social_http_base_url,
-        '/api/transaction/': settings.transaction_http_base_url,
-        '/api/transactions/': settings.transaction_http_base_url,
-        '/api/notification/': settings.notification_http_base_url,
+        'auth': (settings.auth_http_base_url, '/api/auth/'),
+        'social': (settings.social_http_base_url, '/api/social/'),
+        'transaction': (settings.transaction_http_base_url, '/api/transactions/'),
+        'transactions': (settings.transaction_http_base_url, '/api/transactions/'),
+        'notification': (settings.notification_http_base_url, '/api/notification/'),
     }
 
 
@@ -32,7 +32,9 @@ def _graphql_service_map() -> Dict[str, str]:
 
 async def _forward_request(target_base: str, suffix: str, request: Request) -> Response:
     body = await request.body()
-    target_url = f"{target_base}{suffix}"
+    base = target_base.rstrip('/')
+    path = suffix if suffix.startswith('/') else f'/{suffix}'
+    target_url = f"{base}{path}"
     query = request.url.query
     if query:
         target_url = f"{target_url}?{query}"
@@ -61,13 +63,22 @@ async def _forward_request(target_base: str, suffix: str, request: Request) -> R
 
 @router.api_route('/api/{service}/{path:path}', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
 async def proxy_api(service: str, path: str, request: Request):
-    prefix = f'/api/{service}/'
-    base = _service_bases().get(prefix)
-    if not base:
+    route = _service_routes().get(service.lower())
+    if not route:
         raise HTTPException(status_code=404, detail='Service route not found')
 
-    suffix = f'/{path}' if path else '/'
+    base, upstream_prefix = route
+    suffix = f'{upstream_prefix}{path}' if path else upstream_prefix
     return await _forward_request(base, suffix, request)
+
+
+@router.api_route('/oauth', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
+@router.api_route('/oauth/', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
+@router.api_route('/oauth/{path:path}', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
+async def proxy_oauth(request: Request, path: str = ''):
+    settings = get_settings()
+    suffix = f'/oauth/{path}' if path else '/oauth/'
+    return await _forward_request(settings.auth_http_base_url, suffix, request)
 
 
 @router.post('/graphql/{path:path}')
