@@ -9,7 +9,7 @@ from axes.decorators import axes_dispatch
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
 from django.core import signing
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect
 from django.utils.decorators import method_decorator
 from rest_framework import status
@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 
 from apps.otp.models import OTPCode
 from apps.otp.services import generate_otp
-from apps.users.models import RefreshToken, User
+from apps.users.models import RefreshToken, User, make_email_lookup, normalize_email
 from apps.users.serializers import (
     ChangePasswordSerializer,
     ForgotPasswordSerializer,
@@ -29,6 +29,7 @@ from apps.users.serializers import (
 )
 
 INVALID_CREDENTIALS = {"detail": "Invalid credentials"}
+REGISTRATION_FAILED = {"detail": "Registration could not be completed"}
 GOOGLE_STATE_SALT = "google-oauth-state"
 GOOGLE_SCOPES = "openid email profile"
 
@@ -69,6 +70,13 @@ def _issue_tokens(user: User):
     refresh = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm="HS256")
     RefreshToken.objects.create(user=user, token_hash=_hash_token(refresh), is_revoked=False)
     return access, refresh
+
+
+def _get_user_by_email(email: str) -> User | None:
+    normalized_email = normalize_email(email)
+    if not normalized_email:
+        return None
+    return User.objects.filter(email_lookup=make_email_lookup(normalized_email)).first()
 
 
 def _allowed_frontend_origins() -> list[str]:
@@ -161,7 +169,7 @@ def _load_google_payload(id_token: str = "", access_token: str = "") -> dict:
 
 
 def _google_user_from_payload(payload: dict) -> User:
-    email = payload.get("email")
+    email = normalize_email(payload.get("email", ""))
     google_sub = payload.get("sub")
     name = payload.get("name") or "user"
     if not email or not google_sub:
@@ -169,7 +177,7 @@ def _google_user_from_payload(payload: dict) -> User:
 
     user = User.objects.filter(google_sub=google_sub).first()
     if user is None:
-        user = User.objects.filter(email=email).first()
+        user = _get_user_by_email(email)
 
     if user is None:
         user = User.objects.create(
@@ -242,26 +250,27 @@ class RegisterView(PublicEndpointMixin, APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(REGISTRATION_FAILED, status=status.HTTP_400_BAD_REQUEST)
+
+        username = serializer.validated_data["username"]
+        normalized_email = normalize_email(serializer.validated_data["email"])
+
+        if User.objects.filter(username=username).exists() or _get_user_by_email(normalized_email):
+            return Response(REGISTRATION_FAILED, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user, created = User.objects.get_or_create(
-                username=serializer.validated_data["username"],
-                defaults={
-                    "email": serializer.validated_data["email"],
-                    "password_hash": serializer.get_password_hash(),
-                },
-            )
-            if not created:
-                return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
-        except IntegrityError:
-            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
-
-        try:
-            otp_code = generate_otp(user, OTPCode.CONTEXT_REGISTER)
-            _send_otp_email(serializer.validated_data["email"], otp_code, OTPCode.CONTEXT_REGISTER)
+            with transaction.atomic():
+                user = User.objects.create(
+                    username=username,
+                    email=normalized_email,
+                    password_hash=serializer.get_password_hash(),
+                )
+                otp_code = generate_otp(user, OTPCode.CONTEXT_REGISTER)
+                _send_otp_email(normalized_email, otp_code, OTPCode.CONTEXT_REGISTER)
+        except (IntegrityError, ValueError):
+            return Response(REGISTRATION_FAILED, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
-            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(REGISTRATION_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)
 
@@ -273,9 +282,8 @@ class LoginView(PublicEndpointMixin, APIView):
         if not serializer.is_valid():
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
-        try:
-            user = User.objects.get(email=serializer.validated_data["email"])
-        except User.DoesNotExist:
+        user = _get_user_by_email(serializer.validated_data["email"])
+        if user is None:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         if not user.password_hash or not check_password(serializer.validated_data["password"], user.password_hash):
@@ -414,10 +422,13 @@ class ForgotPasswordView(PublicEndpointMixin, APIView):
         if not serializer.is_valid():
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
+        normalized_email = normalize_email(serializer.validated_data["email"])
+        user = _get_user_by_email(normalized_email)
+        if user is None:
+            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
         try:
-            user = User.objects.get(email=serializer.validated_data["email"])
             otp_code = generate_otp(user, OTPCode.CONTEXT_FORGOT)
-            _send_otp_email(serializer.validated_data["email"], otp_code, OTPCode.CONTEXT_FORGOT)
+            _send_otp_email(normalized_email, otp_code, OTPCode.CONTEXT_FORGOT)
         except Exception:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -431,9 +442,8 @@ class ChangePasswordView(PublicEndpointMixin, APIView):
         if not serializer.is_valid():
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
-        try:
-            user = User.objects.get(email=serializer.validated_data["email"])
-        except User.DoesNotExist:
+        user = _get_user_by_email(serializer.validated_data["email"])
+        if user is None:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         if not user.password_hash or not check_password(serializer.validated_data["old_password"], user.password_hash):

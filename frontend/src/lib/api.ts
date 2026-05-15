@@ -58,6 +58,22 @@ function flushQueue(token: string | null): void {
   refreshQueue = [];
 }
 
+function isPublicAuthEndpoint(url?: string): boolean {
+  if (!url) {
+    return false;
+  }
+
+  return [
+    '/api/auth/login/',
+    '/api/auth/register/',
+    '/api/auth/otp/verify/',
+    '/api/auth/forgot-password/',
+    '/api/auth/change-password/request/',
+    '/api/auth/change-password/',
+    '/oauth/',
+  ].some((endpoint) => url.includes(endpoint));
+}
+
 function redirectToLogin(): void {
   clearTokens();
   window.location.href = '/';
@@ -78,6 +94,10 @@ api.interceptors.response.use(
     const status = error.response?.status;
 
     if (!originalRequest || status !== 401 || originalRequest._retry) {
+      return Promise.reject(error);
+    }
+
+    if (isPublicAuthEndpoint(originalRequest.url)) {
       return Promise.reject(error);
     }
 

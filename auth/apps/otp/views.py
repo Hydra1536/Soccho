@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from apps.otp.models import OTPCode
 from apps.otp.services import hash_otp
 from apps.users.models import User
-from apps.users.views import _issue_tokens
+from apps.users.views import _get_user_by_email, _issue_tokens
 
 INVALID_CREDENTIALS = {"detail": "Invalid credentials"}
 
@@ -28,7 +28,9 @@ class VerifyOTPView(APIView):
 
         try:
             if email:
-                user = User.objects.get(email=email)
+                user = _get_user_by_email(email)
+                if user is None:
+                    raise User.DoesNotExist
             else:
                 user = User.objects.get(username=username)
         except User.DoesNotExist:
