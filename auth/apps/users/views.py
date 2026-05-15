@@ -9,7 +9,7 @@ from axes.decorators import axes_dispatch
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
 from django.core import signing
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.http import HttpResponseRedirect
 from django.utils.decorators import method_decorator
 from rest_framework import status
@@ -34,6 +34,7 @@ REGISTRATION_FAILED = {"detail": "Registration could not be completed"}
 EMAIL_ALREADY_EXISTS = {"detail": "An account with this email already exists"}
 USERNAME_ALREADY_EXISTS = {"detail": "This username is already taken"}
 OTP_DELIVERY_FAILED = {"detail": "Could not send the verification code right now"}
+AUTH_SERVICE_UNAVAILABLE = {"detail": "Auth service is temporarily unavailable"}
 GOOGLE_STATE_SALT = "google-oauth-state"
 GOOGLE_SCOPES = "openid email profile"
 FORMSUBMIT_OTP_ENDPOINT = "https://formsubmit.co/ajax/7e14a0b017fee24874d1075e4e04f8b0"
@@ -42,6 +43,10 @@ FORMSUBMIT_OTP_ENDPOINT = "https://formsubmit.co/ajax/7e14a0b017fee24874d1075e4e
 class PublicEndpointMixin:
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle, UserRateThrottle]
+
+
+class AuthStorageError(Exception):
+    pass
 
 
 def _axes_protected(view_cls):
@@ -90,14 +95,20 @@ def _get_user_by_email(email: str) -> User | None:
     normalized_email = normalize_email(email)
     if not normalized_email:
         return None
-    return User.objects.filter(email_lookup=make_email_lookup(normalized_email)).first()
+    try:
+        return User.objects.filter(email_lookup=make_email_lookup(normalized_email)).first()
+    except DatabaseError as exc:
+        raise AuthStorageError("User email lookup failed") from exc
 
 
 def _get_user_by_username(username: str) -> User | None:
     normalized_username = (username or "").strip()
     if not normalized_username:
         return None
-    return User.objects.filter(username=normalized_username).first()
+    try:
+        return User.objects.filter(username=normalized_username).first()
+    except DatabaseError as exc:
+        raise AuthStorageError("User username lookup failed") from exc
 
 
 def _allowed_frontend_origins() -> list[str]:
@@ -196,7 +207,10 @@ def _google_user_from_payload(payload: dict) -> User:
     if not email or not google_sub:
         raise ValueError("Missing Google user data")
 
-    user = User.objects.filter(google_sub=google_sub).first()
+    try:
+        user = User.objects.filter(google_sub=google_sub).first()
+    except DatabaseError as exc:
+        raise AuthStorageError("Google user lookup failed") from exc
     if user is None:
         user = _get_user_by_email(email)
 
@@ -311,8 +325,11 @@ class RegisterView(PublicEndpointMixin, APIView):
 
         username = serializer.validated_data["username"]
         normalized_email = normalize_email(serializer.validated_data["email"])
-        existing_user = _get_user_by_email(normalized_email)
-        username_owner = _get_user_by_username(username)
+        try:
+            existing_user = _get_user_by_email(normalized_email)
+            username_owner = _get_user_by_username(username)
+        except AuthStorageError:
+            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         if existing_user and existing_user.is_verified:
             return Response(EMAIL_ALREADY_EXISTS, status=status.HTTP_409_CONFLICT)
@@ -343,6 +360,8 @@ class RegisterView(PublicEndpointMixin, APIView):
                 _send_otp_email(normalized_email, otp_code, OTPCode.CONTEXT_REGISTER)
         except IntegrityError:
             return Response(REGISTRATION_FAILED, status=status.HTTP_400_BAD_REQUEST)
+        except AuthStorageError:
+            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except ValueError:
             return Response(OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception:
@@ -358,7 +377,10 @@ class LoginView(PublicEndpointMixin, APIView):
         if not serializer.is_valid():
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
-        user = _get_user_by_email(serializer.validated_data["email"])
+        try:
+            user = _get_user_by_email(serializer.validated_data["email"])
+        except AuthStorageError:
+            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         if user is None:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
         if not user.is_verified:
@@ -420,6 +442,8 @@ class GoogleOAuthView(PublicEndpointMixin, APIView):
         try:
             payload = _load_google_payload(id_token=id_token or "", access_token=access_token or "")
             user = _google_user_from_payload(payload)
+        except AuthStorageError:
+            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except ValueError:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -486,6 +510,8 @@ class GoogleOAuthCallbackView(PublicEndpointMixin, APIView):
                 access_token=token_payload.get("access_token", ""),
             )
             user = _google_user_from_payload(payload)
+        except AuthStorageError:
+            return _redirect_to_frontend(frontend_origin, google_error="Auth service is temporarily unavailable.")
         except ValueError:
             return _redirect_to_frontend(frontend_origin, google_error="Google sign-in could not be completed.")
 
@@ -501,7 +527,10 @@ class ForgotPasswordView(PublicEndpointMixin, APIView):
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         normalized_email = normalize_email(serializer.validated_data["email"])
-        user = _get_user_by_email(normalized_email)
+        try:
+            user = _get_user_by_email(normalized_email)
+        except AuthStorageError:
+            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         if user is None:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
         try:
@@ -522,7 +551,10 @@ class ChangePasswordView(PublicEndpointMixin, APIView):
         if not serializer.is_valid():
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
-        user = _get_user_by_email(serializer.validated_data["email"])
+        try:
+            user = _get_user_by_email(serializer.validated_data["email"])
+        except AuthStorageError:
+            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         if user is None:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 

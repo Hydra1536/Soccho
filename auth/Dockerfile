@@ -12,4 +12,4 @@ COPY . /app
 
 EXPOSE 8001
 
-CMD ["sh", "-c", "gunicorn auth_service.wsgi --bind 0.0.0.0:${PORT:-8001}"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn auth_service.wsgi --bind 0.0.0.0:${PORT:-8001}"]

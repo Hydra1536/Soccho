@@ -12,4 +12,4 @@ COPY . /app
 
 EXPOSE 8004
 
-CMD ["sh", "-c", "daphne -b 0.0.0.0 -p ${PORT:-8004} notification_service.asgi:application"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p ${PORT:-8004} notification_service.asgi:application"]

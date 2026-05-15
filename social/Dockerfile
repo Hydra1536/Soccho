@@ -12,4 +12,4 @@ COPY . /app
 
 EXPOSE 8002
 
-CMD ["sh", "-c", "gunicorn social_service.wsgi --bind 0.0.0.0:${PORT:-8002}"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn social_service.wsgi --bind 0.0.0.0:${PORT:-8002}"]

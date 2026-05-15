@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from apps.otp.models import OTPCode
 from apps.otp.services import hash_otp
 from apps.users.models import User
-from apps.users.views import _get_user_by_email, _issue_tokens
+from apps.users.views import AUTH_SERVICE_UNAVAILABLE, AuthStorageError, _get_user_by_email, _issue_tokens
 
 INVALID_CREDENTIALS = {"detail": "Invalid credentials"}
 
@@ -33,6 +33,8 @@ class VerifyOTPView(APIView):
                     raise User.DoesNotExist
             else:
                 user = User.objects.get(username=username)
+        except AuthStorageError:
+            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except User.DoesNotExist:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 

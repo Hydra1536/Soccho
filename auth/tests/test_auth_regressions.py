@@ -159,6 +159,30 @@ def test_register_view_resends_otp_for_existing_unverified_user(monkeypatch):
     assert pending_otps.updated_kwargs == {"is_used": True}
 
 
+def test_register_view_returns_service_unavailable_on_storage_error(monkeypatch):
+    monkeypatch.setattr(
+        user_views,
+        "_get_user_by_email",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(user_views.AuthStorageError("db error")),
+    )
+
+    request = APIRequestFactory().post(
+        "/api/auth/register/",
+        {
+            "username": "new_user",
+            "email": "new_user@example.com",
+            "password": "pass12345",
+            "confirm_password": "pass12345",
+        },
+        format="json",
+    )
+
+    response = user_views.RegisterView.as_view()(request)
+
+    assert response.status_code == 503
+    assert response.data == {"detail": "Auth service is temporarily unavailable"}
+
+
 def test_send_otp_email_posts_formsubmit_payload(monkeypatch):
     captured = {}
 
