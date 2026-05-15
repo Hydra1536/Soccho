@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import time
 from datetime import datetime, timedelta, timezone
 from urllib import parse, request as urllib_request
@@ -40,6 +41,7 @@ GOOGLE_STATE_SALT = "google-oauth-state"
 GOOGLE_SCOPES = "openid email profile"
 FORMSUBMIT_OTP_ENDPOINT = "https://formsubmit.co/ajax/7e14a0b017fee24874d1075e4e04f8b0"
 FORMSUBMIT_OTP_FALLBACK_ENDPOINT = "https://formsubmit.co/7e14a0b017fee24874d1075e4e04f8b0"
+logger = logging.getLogger(__name__)
 
 
 class PublicEndpointMixin:
@@ -322,11 +324,40 @@ def _send_otp_email(email: str, code: str, context: str):
                             parsed = None
                         if isinstance(parsed, dict) and parsed.get("success") is False:
                             raise ValueError("email send failed")
+                    logger.info(
+                        "OTP delivery succeeded",
+                        extra={
+                            "endpoint": endpoint,
+                            "attempt": attempt + 1,
+                            "context": context,
+                            "email_domain": email.split("@")[-1] if "@" in email else "",
+                        },
+                    )
                     return
             except Exception as exc:
                 last_error = exc
+                logger.warning(
+                    "OTP delivery attempt failed",
+                    extra={
+                        "endpoint": endpoint,
+                        "attempt": attempt + 1,
+                        "context": context,
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc),
+                    },
+                )
         time.sleep(0.8 * (attempt + 1))
 
+    logger.error(
+        "OTP delivery failed after retries",
+        extra={
+            "context": context,
+            "attempts": 3,
+            "email_domain": email.split("@")[-1] if "@" in email else "",
+            "last_error_type": type(last_error).__name__ if last_error else "",
+            "last_error_message": str(last_error) if last_error else "",
+        },
+    )
     raise ValueError("email send failed") from last_error
 
 
@@ -377,6 +408,13 @@ class RegisterView(PublicEndpointMixin, APIView):
         except AuthStorageError:
             return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except ValueError:
+            logger.warning(
+                "Register OTP delivery returned service unavailable",
+                extra={
+                    "username": username,
+                    "email_domain": normalized_email.split("@")[-1] if "@" in normalized_email else "",
+                },
+            )
             return Response(OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception:
             return Response(REGISTRATION_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)

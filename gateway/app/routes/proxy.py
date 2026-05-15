@@ -1,4 +1,5 @@
 from typing import Dict
+import logging
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -7,6 +8,7 @@ from fastapi.responses import Response
 from app.config import get_settings
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _service_routes() -> Dict[str, tuple[str, str]]:
@@ -54,6 +56,17 @@ async def _forward_request(target_base: str, suffix: str, request: Request) -> R
             url=target_url,
             headers=headers,
             content=body,
+        )
+
+    if upstream.status_code >= 500:
+        logger.error(
+            "Upstream service returned 5xx",
+            extra={
+                "method": request.method,
+                "target_url": target_url,
+                "status_code": upstream.status_code,
+                "response_preview": upstream.text[:500],
+            },
         )
 
     return Response(
