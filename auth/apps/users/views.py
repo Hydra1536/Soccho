@@ -284,12 +284,21 @@ async def _send_otp_email_async(user_email: str, otp_code: str):
     if not service_id or not template_id or not public_key:
         raise ValueError("email send failed")
 
+    recipient_email = (user_email or "").strip()
+    if not recipient_email:
+        raise ValueError("email send failed")
+
     payload = {
         "service_id": service_id,
         "template_id": template_id,
         "user_id": public_key,
         "template_params": {
-            "to_email": user_email,
+            # Include common recipient aliases so EmailJS templates with different
+            # variable names (email, to_email, user_email) still resolve correctly.
+            "to_email": recipient_email,
+            "email": recipient_email,
+            "user_email": recipient_email,
+            "recipient_email": recipient_email,
             "passcode": otp_code,
         },
     }
@@ -316,6 +325,10 @@ async def _send_otp_email_async(user_email: str, otp_code: str):
                 ):
                     logger.error(
                         "EmailJS blocked backend request. Enable non-browser API access in EmailJS dashboard security settings."
+                    )
+                if response.status_code == 422 and "recipients address is empty" in response.text.lower():
+                    logger.error(
+                        "EmailJS template recipient is unresolved. Set the template 'To Email' value to {{to_email}} (or {{email}})."
                     )
                 raise ValueError(
                     f"status={response.status_code} body={response.text[:200]}"

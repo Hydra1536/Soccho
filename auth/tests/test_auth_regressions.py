@@ -212,4 +212,7 @@ def test_send_otp_email_posts_emailjs_payload(monkeypatch):
     assert payload["template_id"] == "template_60h0786"
     assert payload["user_id"] == "selFN3purqbDa4wTj"
     assert payload["template_params"]["to_email"] == "person@example.com"
+    assert payload["template_params"]["email"] == "person@example.com"
+    assert payload["template_params"]["user_email"] == "person@example.com"
+    assert payload["template_params"]["recipient_email"] == "person@example.com"
     assert payload["template_params"]["passcode"] == "123456"
