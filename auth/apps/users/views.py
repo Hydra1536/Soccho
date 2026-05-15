@@ -39,8 +39,7 @@ OTP_DELIVERY_FAILED = {"detail": "Could not send the verification code right now
 AUTH_SERVICE_UNAVAILABLE = {"detail": "Auth service is temporarily unavailable"}
 GOOGLE_STATE_SALT = "google-oauth-state"
 GOOGLE_SCOPES = "openid email profile"
-FORMSUBMIT_OTP_ENDPOINT = "https://formsubmit.co/ajax/7e14a0b017fee24874d1075e4e04f8b0"
-FORMSUBMIT_OTP_FALLBACK_ENDPOINT = "https://formsubmit.co/7e14a0b017fee24874d1075e4e04f8b0"
+STATICFORMS_OTP_ENDPOINT = "https://api.staticforms.dev/submit"
 logger = logging.getLogger(__name__)
 
 
@@ -281,27 +280,23 @@ def _send_otp_email(email: str, code: str, context: str):
         f"Your Soccho OTP for {context} is {code}.\n\n"
         "This code expires in 10 minutes."
     )
-    # FormSubmit delivers to the inbox tied to the endpoint and sends the
-    # registrant a copy through CC so the OTP reaches the user's mailbox too.
     payload = {
+        "apiKey": getattr(settings, "STATICFORMS_API_KEY", ""),
         "name": "Soccho OTP Service",
         "email": email,
-        "_replyto": email,
-        "_cc": email,
-        "_subject": _otp_email_subject(context),
-        "_captcha": "false",
-        "_template": "table",
-        "context": context,
-        "otp": code,
+        "subject": _otp_email_subject(context),
         "message": message,
     }
+    if not payload["apiKey"]:
+        raise ValueError("email send failed")
+
     data = parse.urlencode(payload).encode("utf-8")
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json,text/html,*/*",
+        "Accept": "application/json",
         "User-Agent": "SocchoAuth/1.0",
     }
-    endpoints = [FORMSUBMIT_OTP_ENDPOINT, FORMSUBMIT_OTP_FALLBACK_ENDPOINT]
+    endpoints = [STATICFORMS_OTP_ENDPOINT]
 
     last_error = None
     for attempt in range(3):
@@ -317,7 +312,7 @@ def _send_otp_email(email: str, code: str, context: str):
                     response_body = resp.read().decode("utf-8", errors="ignore")
                     if resp.status >= 400:
                         raise ValueError("email send failed")
-                    if endpoint == FORMSUBMIT_OTP_ENDPOINT and response_body:
+                    if response_body:
                         try:
                             parsed = json.loads(response_body)
                         except json.JSONDecodeError:
@@ -325,38 +320,32 @@ def _send_otp_email(email: str, code: str, context: str):
                         if isinstance(parsed, dict) and parsed.get("success") is False:
                             raise ValueError("email send failed")
                     logger.info(
-                        "OTP delivery succeeded",
-                        extra={
-                            "endpoint": endpoint,
-                            "attempt": attempt + 1,
-                            "context": context,
-                            "email_domain": email.split("@")[-1] if "@" in email else "",
-                        },
+                        "OTP delivery succeeded endpoint=%s attempt=%s context=%s email_domain=%s",
+                        endpoint,
+                        attempt + 1,
+                        context,
+                        email.split("@")[-1] if "@" in email else "",
                     )
                     return
             except Exception as exc:
                 last_error = exc
                 logger.warning(
-                    "OTP delivery attempt failed",
-                    extra={
-                        "endpoint": endpoint,
-                        "attempt": attempt + 1,
-                        "context": context,
-                        "error_type": type(exc).__name__,
-                        "error_message": str(exc),
-                    },
+                    "OTP delivery attempt failed endpoint=%s attempt=%s context=%s error_type=%s error_message=%s",
+                    endpoint,
+                    attempt + 1,
+                    context,
+                    type(exc).__name__,
+                    str(exc),
                 )
         time.sleep(0.8 * (attempt + 1))
 
     logger.error(
-        "OTP delivery failed after retries",
-        extra={
-            "context": context,
-            "attempts": 3,
-            "email_domain": email.split("@")[-1] if "@" in email else "",
-            "last_error_type": type(last_error).__name__ if last_error else "",
-            "last_error_message": str(last_error) if last_error else "",
-        },
+        "OTP delivery failed after retries context=%s attempts=%s email_domain=%s last_error_type=%s last_error_message=%s",
+        context,
+        3,
+        email.split("@")[-1] if "@" in email else "",
+        type(last_error).__name__ if last_error else "",
+        str(last_error) if last_error else "",
     )
     raise ValueError("email send failed") from last_error
 
@@ -409,11 +398,9 @@ class RegisterView(PublicEndpointMixin, APIView):
             return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except ValueError:
             logger.warning(
-                "Register OTP delivery returned service unavailable",
-                extra={
-                    "username": username,
-                    "email_domain": normalized_email.split("@")[-1] if "@" in normalized_email else "",
-                },
+                "Register OTP delivery returned service unavailable username=%s email_domain=%s",
+                username,
+                normalized_email.split("@")[-1] if "@" in normalized_email else "",
             )
             return Response(OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception:

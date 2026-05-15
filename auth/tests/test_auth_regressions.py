@@ -1,5 +1,4 @@
 from types import SimpleNamespace
-from urllib.parse import parse_qs
 
 import pytest
 from rest_framework.test import APIRequestFactory
@@ -183,7 +182,7 @@ def test_register_view_returns_service_unavailable_on_storage_error(monkeypatch)
     assert response.data == {"detail": "Auth service is temporarily unavailable"}
 
 
-def test_send_otp_email_posts_formsubmit_payload(monkeypatch):
+def test_send_otp_email_posts_staticforms_payload(monkeypatch):
     captured = {}
 
     class DummyResponse:
@@ -208,9 +207,10 @@ def test_send_otp_email_posts_formsubmit_payload(monkeypatch):
 
     user_views._send_otp_email("person@example.com", "123456", OTPCode.CONTEXT_REGISTER)
 
-    assert captured["url"] == user_views.FORMSUBMIT_OTP_ENDPOINT
-    payload = parse_qs(captured["body"])
-    assert payload["_cc"] == ["person@example.com"]
-    assert payload["_replyto"] == ["person@example.com"]
-    assert payload["otp"] == ["123456"]
-    assert payload["context"] == [OTPCode.CONTEXT_REGISTER]
+    assert captured["url"] == user_views.STATICFORMS_OTP_ENDPOINT
+    payload = user_views.parse.parse_qs(captured["body"])
+    assert payload["apiKey"] == ["sf_1a45e538a3b9f54e833b9116"]
+    assert payload["name"] == ["Soccho OTP Service"]
+    assert payload["email"] == ["person@example.com"]
+    assert payload["subject"] == ["Soccho account verification OTP"]
+    assert "123456" in payload["message"][0]

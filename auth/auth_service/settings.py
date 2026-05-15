@@ -91,6 +91,8 @@ SIMPLE_JWT = {
     "SIGNING_KEY": SECRET_KEY,
 }
 
+STATICFORMS_API_KEY = os.getenv("STATICFORMS_API_KEY", "sf_1a45e538a3b9f54e833b9116")
+
 ALLOWED_ORIGINS = [x.strip() for x in os.getenv("ALLOWED_ORIGINS", "").split(",") if x.strip()]
 
 
