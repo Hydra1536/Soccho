@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import json
 from datetime import datetime, timedelta, timezone
-from urllib import error, parse, request as urllib_request
+from urllib import parse, request as urllib_request
 
 import jwt
 from axes.decorators import axes_dispatch
@@ -29,9 +29,14 @@ from apps.users.serializers import (
 )
 
 INVALID_CREDENTIALS = {"detail": "Invalid credentials"}
+ACCOUNT_NOT_VERIFIED = {"detail": "Account is not verified. Please verify the OTP code first."}
 REGISTRATION_FAILED = {"detail": "Registration could not be completed"}
+EMAIL_ALREADY_EXISTS = {"detail": "An account with this email already exists"}
+USERNAME_ALREADY_EXISTS = {"detail": "This username is already taken"}
+OTP_DELIVERY_FAILED = {"detail": "Could not send the verification code right now"}
 GOOGLE_STATE_SALT = "google-oauth-state"
 GOOGLE_SCOPES = "openid email profile"
+FORMSUBMIT_OTP_ENDPOINT = "https://formsubmit.co/ajax/7e14a0b017fee24874d1075e4e04f8b0"
 
 
 class PublicEndpointMixin:
@@ -72,11 +77,27 @@ def _issue_tokens(user: User):
     return access, refresh
 
 
+def _serializer_error_detail(serializer) -> str:
+    for errors in serializer.errors.values():
+        if isinstance(errors, (list, tuple)) and errors:
+            return str(errors[0])
+        if errors:
+            return str(errors)
+    return "Request payload is invalid"
+
+
 def _get_user_by_email(email: str) -> User | None:
     normalized_email = normalize_email(email)
     if not normalized_email:
         return None
     return User.objects.filter(email_lookup=make_email_lookup(normalized_email)).first()
+
+
+def _get_user_by_username(username: str) -> User | None:
+    normalized_username = (username or "").strip()
+    if not normalized_username:
+        return None
+    return User.objects.filter(username=normalized_username).first()
 
 
 def _allowed_frontend_origins() -> list[str]:
@@ -185,6 +206,7 @@ def _google_user_from_payload(payload: dict) -> User:
             username=_unique_username(_google_username_seed(name)),
             password_hash=None,
             google_sub=google_sub,
+            is_verified=True,
         )
         return user
 
@@ -195,6 +217,9 @@ def _google_user_from_payload(payload: dict) -> User:
     if user.email != email:
         user.email = email
         update_fields.append("email")
+    if not user.is_verified:
+        user.is_verified = True
+        update_fields.append("is_verified")
     if update_fields:
         user.save(update_fields=update_fields)
     return user
@@ -223,25 +248,57 @@ def _exchange_google_code(code: str, redirect_uri: str) -> dict:
         raise ValueError("Google code exchange failed") from exc
 
 
+def _otp_email_subject(context: str) -> str:
+    if context == OTPCode.CONTEXT_REGISTER:
+        return "Soccho account verification OTP"
+    if context == OTPCode.CONTEXT_FORGOT:
+        return "Soccho password reset OTP"
+    if context == OTPCode.CONTEXT_CHANGE_PW:
+        return "Soccho password change OTP"
+    return "Soccho OTP Code"
+
+
 def _send_otp_email(email: str, code: str, context: str):
-    data = parse.urlencode(
-        {
-            "email": email,
-            "subject": "Soccho OTP Code",
-            "message": f"Your OTP for {context} is {code}. It expires in 10 minutes.",
-        }
-    ).encode("utf-8")
+    message = (
+        f"Your Soccho OTP for {context} is {code}.\n\n"
+        "This code expires in 10 minutes."
+    )
+    # FormSubmit delivers to the inbox tied to the endpoint and sends the
+    # registrant a copy through CC so the OTP reaches the user's mailbox too.
+    payload = {
+        "name": "Soccho OTP Service",
+        "email": email,
+        "_replyto": email,
+        "_cc": email,
+        "_subject": _otp_email_subject(context),
+        "_captcha": "false",
+        "_template": "table",
+        "context": context,
+        "otp": code,
+        "message": message,
+    }
+    data = parse.urlencode(payload).encode("utf-8")
     req = urllib_request.Request(
-        "https://formsubmit.co/ajax/7e14a0b017fee24874d1075e4e04f8b0",
+        FORMSUBMIT_OTP_ENDPOINT,
         data=data,
         headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
         method="POST",
     )
     try:
         with urllib_request.urlopen(req, timeout=10) as resp:
+            response_body = resp.read().decode("utf-8")
             if resp.status >= 400:
                 raise ValueError("email send failed")
-    except (error.URLError, ValueError):
+            if response_body:
+                try:
+                    parsed = json.loads(response_body)
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, dict) and parsed.get("success") is False:
+                    raise ValueError("email send failed")
+    except Exception as exc:
+        if isinstance(exc, ValueError):
+            raise ValueError("email send failed")
         raise ValueError("email send failed")
 
 
@@ -250,25 +307,44 @@ class RegisterView(PublicEndpointMixin, APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(REGISTRATION_FAILED, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": _serializer_error_detail(serializer)}, status=status.HTTP_400_BAD_REQUEST)
 
         username = serializer.validated_data["username"]
         normalized_email = normalize_email(serializer.validated_data["email"])
+        existing_user = _get_user_by_email(normalized_email)
+        username_owner = _get_user_by_username(username)
 
-        if User.objects.filter(username=username).exists() or _get_user_by_email(normalized_email):
-            return Response(REGISTRATION_FAILED, status=status.HTTP_400_BAD_REQUEST)
+        if existing_user and existing_user.is_verified:
+            return Response(EMAIL_ALREADY_EXISTS, status=status.HTTP_409_CONFLICT)
+        if username_owner and (existing_user is None or username_owner.id != existing_user.id):
+            return Response(USERNAME_ALREADY_EXISTS, status=status.HTTP_409_CONFLICT)
 
         try:
             with transaction.atomic():
-                user = User.objects.create(
-                    username=username,
-                    email=normalized_email,
-                    password_hash=serializer.get_password_hash(),
-                )
+                if existing_user is None:
+                    user = User.objects.create(
+                        username=username,
+                        email=normalized_email,
+                        password_hash=serializer.get_password_hash(),
+                        is_verified=False,
+                    )
+                else:
+                    user = existing_user
+                    user.username = username
+                    user.password_hash = serializer.get_password_hash()
+                    user.is_verified = False
+                    user.save(update_fields=["username", "password_hash", "is_verified"])
+                    OTPCode.objects.filter(
+                        user=user,
+                        context=OTPCode.CONTEXT_REGISTER,
+                        is_used=False,
+                    ).update(is_used=True)
                 otp_code = generate_otp(user, OTPCode.CONTEXT_REGISTER)
                 _send_otp_email(normalized_email, otp_code, OTPCode.CONTEXT_REGISTER)
-        except (IntegrityError, ValueError):
+        except IntegrityError:
             return Response(REGISTRATION_FAILED, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError:
+            return Response(OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception:
             return Response(REGISTRATION_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
@@ -285,6 +361,8 @@ class LoginView(PublicEndpointMixin, APIView):
         user = _get_user_by_email(serializer.validated_data["email"])
         if user is None:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+        if not user.is_verified:
+            return Response(ACCOUNT_NOT_VERIFIED, status=status.HTTP_403_FORBIDDEN)
 
         if not user.password_hash or not check_password(serializer.validated_data["password"], user.password_hash):
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
@@ -429,6 +507,8 @@ class ForgotPasswordView(PublicEndpointMixin, APIView):
         try:
             otp_code = generate_otp(user, OTPCode.CONTEXT_FORGOT)
             _send_otp_email(normalized_email, otp_code, OTPCode.CONTEXT_FORGOT)
+        except ValueError:
+            return Response(OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 

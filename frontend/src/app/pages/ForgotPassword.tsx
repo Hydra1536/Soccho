@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { forgotPassword, verifyOTP } from '../../lib/auth';
 import { OTPInput } from '../components/OTPInput';
+import { getApiErrorMessage } from '../../lib/api';
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -21,8 +22,8 @@ export default function ForgotPassword() {
     try {
       await forgotPassword(email);
       setStep('otp');
-    } catch {
-      setError('Unable to send OTP');
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Unable to send OTP'));
     } finally {
       setLoading(false);
     }
@@ -34,8 +35,8 @@ export default function ForgotPassword() {
     try {
       await verifyOTP(email, otp, 'forgot');
       navigate('/home');
-    } catch {
-      setError('Invalid credentials');
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Invalid credentials'));
     } finally {
       setLoading(false);
     }

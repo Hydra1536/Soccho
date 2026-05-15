@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
 import { requestChangePassword, verifyOTP } from '../../lib/auth';
+import { getApiErrorMessage } from '../../lib/api';
 
 export default function ChangePassword() {
   const navigate = useNavigate();
@@ -24,8 +25,8 @@ export default function ChangePassword() {
     try {
       await requestChangePassword(email, oldPassword, newPassword, confirmPassword);
       setStep('otp');
-    } catch {
-      setError('Unable to request password change');
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Unable to request password change'));
     } finally {
       setLoading(false);
     }
@@ -37,8 +38,8 @@ export default function ChangePassword() {
     try {
       await verifyOTP(email, otp, 'change_pw');
       navigate('/home');
-    } catch {
-      setError('Invalid credentials');
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Invalid credentials'));
     } finally {
       setLoading(false);
     }

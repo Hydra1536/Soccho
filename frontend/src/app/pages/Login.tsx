@@ -5,7 +5,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
 import { googleLogin, login, register, verifyOTP, OTPContext } from '../../lib/auth';
-import { persistTokens } from '../../lib/api';
+import { getApiErrorMessage, persistTokens } from '../../lib/api';
 
 type AuthScreen = 'login' | 'register' | 'otp';
 
@@ -50,8 +50,8 @@ export default function Login() {
     try {
       await login(email, password);
       navigate('/home');
-    } catch {
-      setError('Invalid credentials');
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Invalid credentials'));
     } finally {
       setLoading(false);
     }
@@ -65,8 +65,8 @@ export default function Login() {
       await register(username, email, password, confirmPassword);
       setOtpContext('register');
       navigateTo('otp');
-    } catch {
-      setError('Unable to register');
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Unable to register'));
     } finally {
       setLoading(false);
     }
@@ -83,8 +83,8 @@ export default function Login() {
     try {
       await verifyOTP(email, otpCode, otpContext);
       navigate('/home');
-    } catch {
-      setError('Invalid credentials');
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Invalid credentials'));
     } finally {
       setLoading(false);
     }

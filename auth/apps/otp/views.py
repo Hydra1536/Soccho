@@ -53,5 +53,9 @@ class VerifyOTPView(APIView):
         otp.is_used = True
         otp.save(update_fields=["is_used"])
 
+        if context == OTPCode.CONTEXT_REGISTER and not user.is_verified:
+            user.is_verified = True
+            user.save(update_fields=["is_verified"])
+
         access, refresh = _issue_tokens(user)
         return Response({"access": access, "refresh": refresh}, status=status.HTTP_200_OK)

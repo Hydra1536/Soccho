@@ -41,10 +41,13 @@ def test_axes_protected_applies_decoration_when_enabled(monkeypatch, settings):
 
 
 def test_register_view_accepts_drf_request_without_axes(monkeypatch):
-    def fake_get_or_create(*_args, **_kwargs):
-        return SimpleNamespace(id="user-1", username="reza"), True
-
-    monkeypatch.setattr(views.User.objects, "get_or_create", fake_get_or_create)
+    monkeypatch.setattr(views, "_get_user_by_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(views, "_get_user_by_username", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        views.User.objects,
+        "create",
+        lambda **kwargs: SimpleNamespace(id="user-1", username=kwargs["username"]),
+    )
     monkeypatch.setattr(views, "generate_otp", lambda *_args, **_kwargs: "123456")
     monkeypatch.setattr(views, "_send_otp_email", lambda *_args, **_kwargs: None)
 

@@ -21,6 +21,7 @@ class User(models.Model):
     username = models.CharField(max_length=30, unique=True)
     password_hash = models.CharField(max_length=255, null=True, blank=True)
     google_sub = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
