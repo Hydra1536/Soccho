@@ -36,6 +36,21 @@ ROOT_URLCONF = 'notification_service.urls'
 WSGI_APPLICATION = 'notification_service.wsgi.application'
 ASGI_APPLICATION = 'notification_service.asgi.application'
 
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
 
 def _database_config():
     database_url = os.getenv('DATABASE_URL', '').strip()

@@ -35,24 +35,32 @@ ROOT_URLCONF = 'admin_service.urls'
 WSGI_APPLICATION = 'admin_service.wsgi.application'
 
 
-def _database_from_url(url: str):
-    parsed = urlparse(url)
-    if parsed.scheme not in {'postgres', 'postgresql'}:
-        raise ValueError('DATABASE_URL must use postgres/postgresql scheme')
+def _database_config():
+    database_url = os.getenv('DATABASE_URL', '').strip()
+    if database_url:
+        parsed = urlparse(database_url)
+        if parsed.scheme in {'postgres', 'postgresql'}:
+            return {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': parsed.path.lstrip('/'),
+                'USER': parsed.username or '',
+                'PASSWORD': parsed.password or '',
+                'HOST': parsed.hostname or 'localhost',
+                'PORT': str(parsed.port or 5432),
+            }
 
     return {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': parsed.path.lstrip('/'),
-        'USER': parsed.username or '',
-        'PASSWORD': parsed.password or '',
-        'HOST': parsed.hostname or 'localhost',
-        'PORT': str(parsed.port or 5432),
+        'NAME': os.getenv('POSTGRES_DB', 'soccho'),
+        'USER': os.getenv('POSTGRES_USER', 'soccho'),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'soccho'),
+        'HOST': os.getenv('POSTGRES_HOST', 'postgres'),
+        'PORT': os.getenv('POSTGRES_PORT', '5432'),
     }
 
 
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://soccho:soccho@postgres:5432/soccho')
 DATABASES = {
-    'default': _database_from_url(DATABASE_URL)
+    'default': _database_config()
 }
 
 LANGUAGE_CODE = 'en-us'

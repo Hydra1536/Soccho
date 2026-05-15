@@ -41,6 +41,21 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'social_service.urls'
 WSGI_APPLICATION = 'social_service.wsgi.application'
 
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
 
 def _database_config():
     database_url = os.getenv('DATABASE_URL', '').strip()
