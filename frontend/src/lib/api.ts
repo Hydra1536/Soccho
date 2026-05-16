@@ -1,10 +1,13 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 export const API_URL = import.meta.env.VITE_API_URL || 'https://soccho-gateway.onrender.com';
+export const AUTH_SCHEME = (import.meta.env.VITE_AUTH_SCHEME || 'Bearer').trim() || 'Bearer';
 
 export const ACCESS_TOKEN_KEY = 'access_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';
 export const USER_ID_KEY = 'user_id';
+const ACCESS_TOKEN_FALLBACK_KEYS = ['accessToken', 'token', 'jwt'] as const;
+const REFRESH_TOKEN_FALLBACK_KEYS = ['refreshToken'] as const;
 
 const api = axios.create({
   baseURL: API_URL,
@@ -20,15 +23,30 @@ function normalizeStoredToken(raw: string | null): string | null {
     return null;
   }
 
-  return trimmed.replace(/^Bearer\s+/i, '').trim() || null;
+  return trimmed.replace(/^(Bearer|JWT|Token)\s+/i, '').trim() || null;
 }
 
 export function getAccessToken(): string | null {
-  return normalizeStoredToken(localStorage.getItem(ACCESS_TOKEN_KEY));
+  const token = readStorageValue([ACCESS_TOKEN_KEY, ...ACCESS_TOKEN_FALLBACK_KEYS]);
+  return normalizeStoredToken(token);
 }
 
 export function getRefreshToken(): string | null {
-  return normalizeStoredToken(localStorage.getItem(REFRESH_TOKEN_KEY));
+  const token = readStorageValue([REFRESH_TOKEN_KEY, ...REFRESH_TOKEN_FALLBACK_KEYS]);
+  return normalizeStoredToken(token);
+}
+
+function readStorageValue(keys: readonly string[]): string | null {
+  const storages: Storage[] = [localStorage, sessionStorage];
+  for (const storage of storages) {
+    for (const key of keys) {
+      const value = storage.getItem(key);
+      if (value && value.trim()) {
+        return value;
+      }
+    }
+  }
+  return null;
 }
 
 function setTokens(access: string, refresh: string): void {
@@ -48,9 +66,14 @@ function setTokens(access: string, refresh: string): void {
 }
 
 function clearTokens(): void {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(USER_ID_KEY);
+  const storages: Storage[] = [localStorage, sessionStorage];
+  for (const storage of storages) {
+    storage.removeItem(ACCESS_TOKEN_KEY);
+    storage.removeItem(REFRESH_TOKEN_KEY);
+    storage.removeItem(USER_ID_KEY);
+    ACCESS_TOKEN_FALLBACK_KEYS.forEach((key) => storage.removeItem(key));
+    REFRESH_TOKEN_FALLBACK_KEYS.forEach((key) => storage.removeItem(key));
+  }
 }
 
 function decodeTokenPayload(token: string): { sub?: string; exp?: number } | null {
@@ -161,10 +184,19 @@ export async function getValidAccessToken(): Promise<string | null> {
   return refreshAccessToken();
 }
 
+export function buildAuthorizationHeader(token: string | null): string {
+  const normalized = normalizeStoredToken(token);
+  return normalized ? `${AUTH_SCHEME} ${normalized}` : '';
+}
+
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = getAccessToken();
-  if (token && !isPublicAuthEndpoint(config.url)) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (!isPublicAuthEndpoint(config.url)) {
+    const authHeader = buildAuthorizationHeader(token);
+    if (authHeader) {
+      config.headers.Authorization = authHeader;
+      config.headers.authorization = authHeader;
+    }
   }
   return config;
 });
@@ -199,7 +231,9 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+      const authHeader = buildAuthorizationHeader(newAccess);
+      originalRequest.headers.Authorization = authHeader;
+      originalRequest.headers.authorization = authHeader;
       return api(originalRequest);
     } catch (refreshError) {
       redirectToLogin();

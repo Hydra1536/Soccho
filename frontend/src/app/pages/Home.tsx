@@ -54,6 +54,9 @@ export default function Home() {
     variables: { userId },
     skip: !userId,
     context: { service: 'transaction' },
+    errorPolicy: 'all',
+    returnPartialData: true,
+    notifyOnNetworkStatusChange: true,
   });
 
   const {
@@ -64,6 +67,9 @@ export default function Home() {
   } = useQuery<{ friendList: FriendNode[] }>(GET_FRIENDS, {
     skip: !userId,
     context: { service: 'social' },
+    errorPolicy: 'all',
+    returnPartialData: true,
+    notifyOnNetworkStatusChange: true,
   });
 
   const summary = summaryData?.dashboardSummary || previousSummaryData?.dashboardSummary || null;

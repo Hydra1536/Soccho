@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings, LogOut, Lock } from 'lucide-react';
+import { ArrowLeft, LogOut, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { BottomNav } from '../components/BottomNav';
@@ -39,10 +39,6 @@ export default function Profile() {
         </div>
 
         <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
-          <button className="w-full px-4 py-4 flex items-center gap-3 hover:bg-[#F3F4F6] transition-colors border-b border-[#E5E7EB]">
-            <Settings size={20} className="text-[#6B7280]" />
-            <span className="flex-1 text-left text-[#111827]">Settings</span>
-          </button>
           <button
             className="w-full px-4 py-4 flex items-center gap-3 hover:bg-[#F3F4F6] transition-colors border-b border-[#E5E7EB]"
             onClick={() => navigate('/change-password')}

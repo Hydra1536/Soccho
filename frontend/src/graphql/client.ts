@@ -3,7 +3,7 @@ import { Observable } from '@apollo/client/core';
 import type { FetchResult, NextLink, Operation } from '@apollo/client/core';
 import { onError } from '@apollo/client/link/error';
 import type { ErrorResponse } from '@apollo/client/link/error';
-import { getValidAccessToken } from '../lib/api';
+import { buildAuthorizationHeader, getAccessToken, getValidAccessToken } from '../lib/api';
 
 export type GatewayService = 'social' | 'transaction' | 'auth' | 'notification';
 
@@ -13,31 +13,6 @@ const httpLink = new HttpLink({
   uri: GRAPHQL_URI,
   credentials: 'include',
 });
-
-const AUTH_SCHEME = (import.meta.env.VITE_AUTH_SCHEME || 'Bearer').trim() || 'Bearer';
-const TOKEN_STORAGE_KEYS = ['access_token', 'accessToken', 'token', 'jwt'];
-
-function readTokenFromStorage(): string | null {
-  const storageBuckets: Storage[] = [localStorage, sessionStorage];
-  for (const storage of storageBuckets) {
-    for (const key of TOKEN_STORAGE_KEYS) {
-      const value = storage.getItem(key);
-      if (value && value.trim()) {
-        return value;
-      }
-    }
-  }
-  return null;
-}
-
-function normalizeToken(rawToken: string | null): string {
-  const cleaned = (rawToken || '').trim().replace(/^["']|["']$/g, '');
-  if (!cleaned) {
-    return '';
-  }
-
-  return cleaned.replace(/^(Bearer|JWT|Token)\s+/i, '').trim();
-}
 
 const authAndServiceLink = new ApolloLink((operation: Operation, forward: NextLink) => {
   return new Observable<FetchResult>((observer) => {
@@ -55,9 +30,8 @@ const authAndServiceLink = new ApolloLink((operation: Operation, forward: NextLi
       };
       const service = currentContext.service || 'social';
       const runtimeToken = await getValidAccessToken();
-      const fallbackToken = readTokenFromStorage();
-      const token = normalizeToken(runtimeToken || fallbackToken);
-      const authorizationValue = token ? `${AUTH_SCHEME} ${token}` : '';
+      const fallbackToken = getAccessToken();
+      const authorizationValue = buildAuthorizationHeader(runtimeToken || fallbackToken);
       const restHeaders = { ...(currentContext.headers || {}) };
       delete restHeaders.authorization;
       delete restHeaders.Authorization;

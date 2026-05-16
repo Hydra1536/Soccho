@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Search, X, Clock, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router';
+import axios from 'axios';
 import api from '../../lib/api';
 import { Avatar } from '../components/Avatar';
 import { BottomNav } from '../components/BottomNav';
@@ -27,19 +28,47 @@ export default function FindFriends() {
   const [showResults, setShowResults] = useState(false);
   const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchErrorMessage, setSearchErrorMessage] = useState('');
 
   const fetchSearchResults = async (query: string) => {
-    const { data } = await api.get('/api/social/search/', { params: { q: query } });
-    setSearchResults(data?.results || []);
+    setIsSearching(true);
+    setSearchErrorMessage('');
+    try {
+      const { data } = await api.get('/api/social/search/', { params: { q: query } });
+      setSearchResults(data?.results || []);
+    } catch (error) {
+      setSearchResults([]);
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        setSearchErrorMessage('Session expired. Please sign in again.');
+        return;
+      }
+      setSearchErrorMessage('Unable to search right now.');
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const fetchSearchHistory = async () => {
-    const { data } = await api.get('/api/social/search/history/');
-    const raw = data?.history || data || [];
-    const parsed = raw
-      .map((item: string | SearchHistoryItem) => (typeof item === 'string' ? JSON.parse(item) : item))
-      .filter((item: SearchHistoryItem) => item?.query);
-    setSearchHistory(parsed);
+    try {
+      const { data } = await api.get('/api/social/search/history/');
+      const raw = data?.history || data || [];
+      const parsed = raw
+        .map((item: string | SearchHistoryItem) => {
+          if (typeof item !== 'string') {
+            return item;
+          }
+          try {
+            return JSON.parse(item) as SearchHistoryItem;
+          } catch {
+            return null;
+          }
+        })
+        .filter((item: SearchHistoryItem | null): item is SearchHistoryItem => !!item?.query);
+      setSearchHistory(parsed);
+    } catch {
+      setSearchHistory([]);
+    }
   };
 
   useEffect(() => {
@@ -52,12 +81,14 @@ export default function FindFriends() {
   }, [searchQuery]);
 
   const handleSearch = (query: string) => {
+    setSearchErrorMessage('');
     setSearchQuery(query);
   };
 
   const clearSearch = () => {
     setSearchQuery('');
     setShowResults(false);
+    setSearchErrorMessage('');
   };
 
   const normalizeScore = (person: SearchResult) => {
@@ -119,6 +150,8 @@ export default function FindFriends() {
             <h2 className="font-bold text-lg mb-3" style={{ fontFamily: 'var(--font-display)' }}>
               Results
             </h2>
+            {isSearching && <p className="text-sm text-[#6B7280] mb-3">Searching...</p>}
+            {searchErrorMessage && <p className="text-sm text-[#B45309] mb-3">{searchErrorMessage}</p>}
             <div className="space-y-3">
               {searchResults.map((person, idx) => (
                 <div key={person.user_id || person.id || idx} className="bg-white rounded-2xl p-4 shadow-sm">

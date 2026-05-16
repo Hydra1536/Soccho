@@ -1,4 +1,4 @@
-import api, { API_URL, dropTokens, persistTokens } from './api';
+import api, { API_URL, dropTokens, getRefreshToken, persistTokens } from './api';
 
 export type OTPContext = 'register' | 'forgot' | 'change_pw';
 
@@ -47,7 +47,7 @@ export async function requestChangePassword(email: string, old_password: string,
 }
 
 export async function logout(): Promise<void> {
-  const refresh = localStorage.getItem('refresh_token');
+  const refresh = getRefreshToken();
   try {
     if (refresh) {
       await api.post('/api/auth/logout/', { refresh });
