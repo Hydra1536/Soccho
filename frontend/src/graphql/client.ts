@@ -1,6 +1,8 @@
 import { ApolloClient, ApolloLink, DefaultOptions, HttpLink, InMemoryCache } from '@apollo/client';
 import { Observable } from '@apollo/client/core';
+import type { FetchResult, NextLink, Operation } from '@apollo/client/core';
 import { onError } from '@apollo/client/link/error';
+import type { ErrorResponse } from '@apollo/client/link/error';
 import { getValidAccessToken } from '../lib/api';
 
 export type GatewayService = 'social' | 'transaction' | 'auth' | 'notification';
@@ -12,8 +14,8 @@ const httpLink = new HttpLink({
   credentials: 'include',
 });
 
-const authAndServiceLink = new ApolloLink((operation, forward) => {
-  return new Observable((observer) => {
+const authAndServiceLink = new ApolloLink((operation: Operation, forward: NextLink) => {
+  return new Observable<FetchResult>((observer) => {
     let subscription: { unsubscribe?: () => void } | undefined;
 
     const run = async () => {
@@ -55,7 +57,8 @@ const authAndServiceLink = new ApolloLink((operation, forward) => {
   });
 });
 
-const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
+const errorLink = onError((errorResponse: ErrorResponse) => {
+  const { graphQLErrors, networkError, operation } = errorResponse;
   if (graphQLErrors?.length) {
     console.error(`GraphQL error in ${operation.operationName || 'anonymous operation'}`, graphQLErrors);
   }
