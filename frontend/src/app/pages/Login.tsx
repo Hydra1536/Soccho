@@ -23,9 +23,10 @@ export default function Login() {
 
   useEffect(() => {
     const hash = new URLSearchParams(window.location.hash.slice(1));
-    const accessToken = hash.get('access_token');
-    const refreshToken = hash.get('refresh_token');
-    const googleError = hash.get('google_error');
+    const query = new URLSearchParams(window.location.search);
+    const accessToken = hash.get('access_token') || query.get('access_token');
+    const refreshToken = hash.get('refresh_token') || query.get('refresh_token');
+    const googleError = hash.get('google_error') || query.get('google_error');
 
     if (accessToken && refreshToken) {
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
