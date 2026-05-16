@@ -2,18 +2,18 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-RUN corepack enable
-
 COPY . .
 
 RUN if [ -f pnpm-lock.yaml ]; then \
+      corepack enable && corepack prepare pnpm@9.15.4 --activate && \
       pnpm install --frozen-lockfile; \
     elif [ -f yarn.lock ]; then \
+      corepack enable && \
       yarn install --frozen-lockfile; \
     elif [ -f package-lock.json ]; then \
       npm ci; \
     else \
-      pnpm install --no-frozen-lockfile; \
+      npm install; \
     fi
 
 RUN if [ -f pnpm-lock.yaml ]; then \
