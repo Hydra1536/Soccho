@@ -14,6 +14,31 @@ const httpLink = new HttpLink({
   credentials: 'include',
 });
 
+const AUTH_SCHEME = (import.meta.env.VITE_AUTH_SCHEME || 'Bearer').trim() || 'Bearer';
+const TOKEN_STORAGE_KEYS = ['access_token', 'accessToken', 'token', 'jwt'];
+
+function readTokenFromStorage(): string | null {
+  const storageBuckets: Storage[] = [localStorage, sessionStorage];
+  for (const storage of storageBuckets) {
+    for (const key of TOKEN_STORAGE_KEYS) {
+      const value = storage.getItem(key);
+      if (value && value.trim()) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+function normalizeToken(rawToken: string | null): string {
+  const cleaned = (rawToken || '').trim().replace(/^["']|["']$/g, '');
+  if (!cleaned) {
+    return '';
+  }
+
+  return cleaned.replace(/^(Bearer|JWT|Token)\s+/i, '').trim();
+}
+
 const authAndServiceLink = new ApolloLink((operation: Operation, forward: NextLink) => {
   return new Observable<FetchResult>((observer) => {
     let subscription: { unsubscribe?: () => void } | undefined;
@@ -29,14 +54,18 @@ const authAndServiceLink = new ApolloLink((operation: Operation, forward: NextLi
         service?: GatewayService;
       };
       const service = currentContext.service || 'social';
-      const rawToken = await getValidAccessToken();
-      const token = rawToken?.replace(/^Bearer\s+/i, '').trim() || '';
-      const authorizationValue = token ? `Bearer ${token}` : '';
+      const runtimeToken = await getValidAccessToken();
+      const fallbackToken = readTokenFromStorage();
+      const token = normalizeToken(runtimeToken || fallbackToken);
+      const authorizationValue = token ? `${AUTH_SCHEME} ${token}` : '';
+      const restHeaders = { ...(currentContext.headers || {}) };
+      delete restHeaders.authorization;
+      delete restHeaders.Authorization;
 
       operation.setContext({
         ...currentContext,
         headers: {
-          ...(currentContext.headers || {}),
+          ...restHeaders,
           'X-Service': service,
           ...(authorizationValue
             ? {
