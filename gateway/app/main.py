@@ -28,8 +28,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title='Soccho Gateway', lifespan=lifespan)
-configure_cors(app)
 app.add_middleware(JWTValidationMiddleware)
+configure_cors(app)
 
 app.include_router(health_router)
 app.include_router(proxy_router)

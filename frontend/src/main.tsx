@@ -1,5 +1,7 @@
 import { createRoot } from "react-dom/client";
+import { ApolloProvider } from '@apollo/client';
 import App from "./app/App.tsx";
+import { apolloClient } from './graphql/client';
 import "./styles/index.css";
 
 if ('serviceWorker' in navigator) {
@@ -8,4 +10,8 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <ApolloProvider client={apolloClient}>
+    <App />
+  </ApolloProvider>
+);

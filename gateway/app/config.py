@@ -42,7 +42,11 @@ class Settings(BaseSettings):
 
     @property
     def allowed_origins(self) -> List[str]:
-        return [origin.strip() for origin in self.allowed_origins_raw.split(',') if origin.strip()]
+        required_origin = 'https://soccho.onrender.com'
+        origins = [origin.strip() for origin in self.allowed_origins_raw.split(',') if origin.strip()]
+        if required_origin not in origins:
+            origins.append(required_origin)
+        return origins
 
 
 @lru_cache(maxsize=1)

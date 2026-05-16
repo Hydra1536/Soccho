@@ -97,8 +97,13 @@ async def proxy_oauth(request: Request, path: str = ''):
     return await _forward_request(settings.auth_http_base_url, suffix, request)
 
 
-@router.post('/graphql/{path:path}')
-async def proxy_graphql(path: str, request: Request):
+@router.api_route('/graphql', methods=['POST', 'OPTIONS'])
+@router.api_route('/graphql/', methods=['POST', 'OPTIONS'])
+@router.api_route('/graphql/{path:path}', methods=['POST', 'OPTIONS'])
+async def proxy_graphql(request: Request, path: str = ''):
+    if request.method == 'OPTIONS':
+        return Response(status_code=200)
+
     service_name = request.headers.get('X-Service', '').strip().lower()
     base = _graphql_service_map().get(service_name)
     if not base:

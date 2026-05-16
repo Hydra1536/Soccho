@@ -40,10 +40,10 @@ function openDb() {
   });
 }
 
-async function enqueueTransaction(payload) {
+async function enqueueTransaction(item) {
   const db = await openDb();
   const tx = db.transaction(STORE, 'readwrite');
-  tx.objectStore(STORE).add({ payload, createdAt: Date.now() });
+  tx.objectStore(STORE).add({ ...item, createdAt: Date.now() });
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve(true);
     tx.onerror = () => reject(tx.error);
@@ -95,11 +95,26 @@ async function getFreshCached(request) {
   return cached;
 }
 
+function shouldCacheGraphqlPayload(payload) {
+  const operationName = String(payload?.operationName || '');
+  const query = String(payload?.query || '');
+  if (operationName === 'GetFriends' || operationName === 'FriendLedger') {
+    return true;
+  }
+  return query.includes('friendList') || query.includes('friendLedger');
+}
+
+function graphqlCacheKey(url, payload) {
+  const operationName = encodeURIComponent(String(payload?.operationName || 'anonymous'));
+  const variables = encodeURIComponent(JSON.stringify(payload?.variables || {}));
+  return new Request(`${url.origin}/__graphql_cache__?op=${operationName}&vars=${variables}`);
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  if (req.method === 'GET' && (url.pathname === '/home' || url.pathname.startsWith('/api/social/friends/'))) {
+  if (req.method === 'GET' && url.pathname === '/home') {
     event.respondWith(
       (async () => {
         try {
@@ -116,6 +131,39 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (req.method === 'POST' && url.pathname.startsWith('/graphql/')) {
+    event.respondWith(
+      (async () => {
+        let payload = null;
+        try {
+          payload = await req.clone().json();
+        } catch {
+          return fetch(req.clone());
+        }
+
+        if (!shouldCacheGraphqlPayload(payload)) {
+          return fetch(req.clone());
+        }
+
+        const cacheKey = graphqlCacheKey(url, payload);
+
+        try {
+          const network = await fetch(req.clone());
+          if (network.ok) await cacheWithTtl(cacheKey, network.clone());
+          return network;
+        } catch {
+          const cached = await getFreshCached(cacheKey);
+          if (cached) return cached;
+          return new Response(JSON.stringify({ error: 'offline' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      })()
+    );
+    return;
+  }
+
   if (req.method === 'POST' && url.pathname.startsWith('/api/transactions/')) {
     event.respondWith(
       (async () => {
@@ -123,7 +171,12 @@ self.addEventListener('fetch', (event) => {
           return await fetch(req.clone());
         } catch {
           const body = await req.clone().json();
-          await enqueueTransaction(body);
+          const authHeader = req.headers.get('Authorization');
+          await enqueueTransaction({
+            url: req.url,
+            payload: body,
+            authorization: authHeader || '',
+          });
           if ('sync' in self.registration) {
             await self.registration.sync.register('sync-transactions');
           }
@@ -145,9 +198,13 @@ self.addEventListener('sync', (event) => {
       const completed = [];
       for (const item of queued) {
         try {
-          const res = await fetch('/api/transactions/', {
+          const headers = { 'Content-Type': 'application/json' };
+          if (item.authorization) {
+            headers.Authorization = item.authorization;
+          }
+          const res = await fetch(item.url || '/api/transactions/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify(item.payload),
           });
           if (res.ok) completed.push(item.id);

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowUp, ArrowDown } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router';
 import { motion } from 'motion/react';
+import { useQuery } from '@apollo/client';
 import api from '../../lib/api';
+import { GET_FRIEND_LEDGER, GET_FRIENDS } from '../../graphql/queries';
 import { Avatar } from '../components/Avatar';
 import { StatusChip } from '../components/StatusChip';
 import { Button } from '../components/Button';
@@ -19,81 +21,96 @@ type LedgerTx = {
   due_date: string;
 };
 
+type FriendNode = {
+  friendshipId: string;
+  requesterId: string;
+  addresseeId: string;
+  status: string;
+  createdAt: string;
+  userId: string;
+  username: string;
+  loyaltyScore?: number | null;
+};
+
+type LedgerNode = {
+  friendshipId: string;
+  netBalance: number;
+  transactions: Array<{
+    id: string;
+    lenderId: string;
+    borrowerId: string;
+    friendshipId: string;
+    amount: number;
+    status: 'pending' | 'confirmed' | 'denied';
+    dueDate: string;
+  }>;
+};
+
 export default function FriendDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [transactions, setTransactions] = useState<LedgerTx[]>([]);
-  const [netBalance, setNetBalance] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [friendUserId, setFriendUserId] = useState('');
-  const [friendName, setFriendName] = useState('Friend');
-
-  useEffect(() => {
-    const fetchLedger = async () => {
-      if (!id) return;
-      const myId = localStorage.getItem('user_id') || '';
-
-      try {
-        const [friendshipsResponse, directoryResponse] = await Promise.all([
-          api.get('/api/social/friends/'),
-          api.post(
-            '/graphql/',
-            {
-              query: `query FriendList { friendList { userId username } }`,
-            },
-            { headers: { 'X-Service': 'social' } }
-          ),
-        ]);
-
-        const friendships = friendshipsResponse.data?.results || friendshipsResponse.data || [];
-        const friendship = friendships.find((row: any) => String(row.id) === String(id));
-        if (friendship) {
-          const otherUserId = friendship.requester_id === myId ? friendship.addressee_id : friendship.requester_id;
-          setFriendUserId(otherUserId || '');
-
-          const friendNodes = directoryResponse.data?.data?.friendList || [];
-          const friendNode = friendNodes.find((row: any) => String(row.userId) === String(otherUserId));
-          setFriendName(friendNode?.username || 'Friend');
-        }
-      } catch {
-        setFriendUserId('');
-      }
-
-      const { data } = await api.post(
-        '/graphql/',
-        {
-          query: `query FriendLedger($friendshipId: UUID!) { friendLedger(friendshipId: $friendshipId) { friendshipId netBalance transactions { id lenderId borrowerId friendshipId amount status dueDate } } }`,
-          variables: { friendshipId: id },
-        },
-        { headers: { 'X-Service': 'transaction' } }
-      );
-      const ledger = data?.data?.friendLedger;
-      if (ledger) {
-        setNetBalance(Number(ledger.netBalance || 0));
-        const normalized = (ledger.transactions || []).map((t: any) => ({
-          id: String(t.id),
-          lender_id: String(t.lenderId || ''),
-          borrower_id: String(t.borrowerId || ''),
-          friendship_id: String(t.friendshipId || ''),
-          amount: Number(t.amount || 0),
-          status: t.status,
-          due_date: String(t.dueDate || ''),
-        }));
-        setTransactions(normalized);
-      }
-    };
-    void fetchLedger();
-  }, [id]);
+  const [apiError, setApiError] = useState('');
 
   const myId = localStorage.getItem('user_id') || '';
+
+  const {
+    data: friendsData,
+    previousData: previousFriendsData,
+    loading: friendsLoading,
+    error: friendsError,
+  } = useQuery<{ friendList: FriendNode[] }>(GET_FRIENDS, {
+    context: { service: 'social' },
+  });
+
+  const {
+    data: ledgerData,
+    previousData: previousLedgerData,
+    loading: ledgerLoading,
+    error: ledgerError,
+  } = useQuery<{ friendLedger: LedgerNode }>(GET_FRIEND_LEDGER, {
+    variables: { friendshipId: id },
+    skip: !id,
+    context: { service: 'transaction' },
+  });
+
+  const friends = friendsData?.friendList || previousFriendsData?.friendList || [];
+  const friend = useMemo(() => friends.find((row) => String(row.friendshipId) === String(id)), [friends, id]);
+  const friendUserId = friend?.requesterId === myId ? friend?.addresseeId : friend?.requesterId || '';
+  const friendName = friend?.username || 'Friend';
+
+  const ledger = ledgerData?.friendLedger || previousLedgerData?.friendLedger;
+  const netBalance = Number(ledger?.netBalance || 0);
+  const transactions: LedgerTx[] = (ledger?.transactions || []).map((tx) => ({
+    id: String(tx.id),
+    lender_id: String(tx.lenderId || ''),
+    borrower_id: String(tx.borrowerId || ''),
+    friendship_id: String(tx.friendshipId || ''),
+    amount: Number(tx.amount || 0),
+    status: tx.status,
+    due_date: String(tx.dueDate || ''),
+  }));
+
+  useEffect(() => {
+    if (!ledgerError) {
+      setApiError('');
+      return;
+    }
+    if (previousLedgerData?.friendLedger) {
+      setApiError('Showing cached ledger data.');
+      return;
+    }
+    setApiError('Unable to load friend ledger right now.');
+  }, [ledgerError, previousLedgerData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !friendUserId) return;
 
     setLoading(true);
+    setApiError('');
     try {
       await api.post('/api/transactions/', {
         lender_id: myId,
@@ -105,6 +122,8 @@ export default function FriendDetail() {
       });
       setAmount('');
       setDueDate('');
+    } catch {
+      setApiError('Unable to submit transaction. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -124,6 +143,10 @@ export default function FriendDetail() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-6 space-y-6">
+        {(friendsLoading || ledgerLoading) && !ledger && <p className="text-sm text-[#6B7280]">Loading friend details...</p>}
+        {friendsError && !friend && <p className="text-sm text-[#DC2626]">Unable to load friend profile right now.</p>}
+        {apiError && <p className={`text-sm ${apiError.includes('cached') ? 'text-[#B45309]' : 'text-[#DC2626]'}`}>{apiError}</p>}
+
         <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
           <div className="flex justify-center mb-4">
             <Avatar name={friendName} size="large" />
@@ -162,7 +185,7 @@ export default function FriendDetail() {
             </div>
 
             <Input type="date" label="Due Date (optional)" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            <Button type="submit" fullWidth className="mt-6" disabled={loading}>
+            <Button type="submit" fullWidth className="mt-6" disabled={loading || !friendUserId}>
               {loading ? 'Submitting...' : 'Submit'}
             </Button>
           </form>

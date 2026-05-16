@@ -49,5 +49,16 @@ class FriendListQuery(graphene.ObjectType):
         for edge in queryset:
             friend_id = edge.addressee_id if str(edge.requester_id) == user_id else edge.requester_id
             username = loader.load(str(friend_id)).get()
-            rows.append(FriendNode(user_id=friend_id, username=username, loyalty_score=loyalty_score))
+            rows.append(
+                FriendNode(
+                    friendship_id=str(edge.id),
+                    requester_id=edge.requester_id,
+                    addressee_id=edge.addressee_id,
+                    status=edge.status,
+                    created_at=edge.created_at.isoformat(),
+                    user_id=friend_id,
+                    username=username,
+                    loyalty_score=loyalty_score,
+                )
+            )
         return rows
