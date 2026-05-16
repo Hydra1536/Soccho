@@ -1,6 +1,7 @@
 import { ApolloClient, ApolloLink, DefaultOptions, HttpLink, InMemoryCache } from '@apollo/client';
+import { Observable } from '@apollo/client/core';
 import { onError } from '@apollo/client/link/error';
-import { ACCESS_TOKEN_KEY } from '../lib/api';
+import { getValidAccessToken, redirectToLogin } from '../lib/api';
 
 export type GatewayService = 'social' | 'transaction' | 'auth' | 'notification';
 
@@ -12,27 +13,57 @@ const httpLink = new HttpLink({
 });
 
 const authAndServiceLink = new ApolloLink((operation, forward) => {
-  const token = typeof window === 'undefined' ? null : localStorage.getItem(ACCESS_TOKEN_KEY);
-  const currentContext = operation.getContext() as {
-    headers?: Record<string, string>;
-    service?: GatewayService;
-  };
-  const service = currentContext.service || 'social';
-  const headers: Record<string, string> = {
-    ...(currentContext.headers || {}),
-    'X-Service': service,
-  };
+  return new Observable((observer) => {
+    let subscription: { unsubscribe?: () => void } | undefined;
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
+    const run = async () => {
+      if (!forward) {
+        observer.error(new Error('GraphQL transport unavailable'));
+        return;
+      }
 
-  operation.setContext({
-    ...currentContext,
-    headers,
+      const currentContext = operation.getContext() as {
+        headers?: Record<string, string>;
+        service?: GatewayService;
+      };
+      const service = currentContext.service || 'social';
+      const token = await getValidAccessToken();
+
+      if (!token) {
+        if (typeof window !== 'undefined') {
+          redirectToLogin();
+        }
+        observer.error(new Error('Authentication required'));
+        return;
+      }
+
+      operation.setContext({
+        ...currentContext,
+        headers: {
+          ...(currentContext.headers || {}),
+          'X-Service': service,
+          authorization: token ? `Bearer ${token}` : '',
+        },
+      });
+
+      subscription = forward(operation).subscribe({
+        next: (value) => observer.next(value),
+        error: (error) => observer.error(error),
+        complete: () => observer.complete(),
+      });
+    };
+
+    void run().catch((error) => {
+      if (typeof window !== 'undefined') {
+        redirectToLogin();
+      }
+      observer.error(error);
+    });
+
+    return () => {
+      subscription?.unsubscribe?.();
+    };
   });
-
-  return forward(operation);
 });
 
 const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
@@ -40,6 +71,12 @@ const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
     console.error(`GraphQL error in ${operation.operationName || 'anonymous operation'}`, graphQLErrors);
   }
   if (networkError) {
+    const statusCode = typeof networkError === 'object' && networkError && 'statusCode' in networkError
+      ? (networkError as { statusCode?: number }).statusCode
+      : undefined;
+    if (statusCode === 401 && typeof window !== 'undefined') {
+      redirectToLogin();
+    }
     console.error(`Network error in ${operation.operationName || 'anonymous operation'}`, networkError);
   }
 });

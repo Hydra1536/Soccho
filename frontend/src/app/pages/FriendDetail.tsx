@@ -62,6 +62,7 @@ export default function FriendDetail() {
     loading: friendsLoading,
     error: friendsError,
   } = useQuery<{ friendList: FriendNode[] }>(GET_FRIENDS, {
+    skip: !myId,
     context: { service: 'social' },
   });
 

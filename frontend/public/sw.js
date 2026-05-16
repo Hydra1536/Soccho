@@ -1,5 +1,5 @@
-const CACHE_NAME = 'soccho-shell-v1';
-const API_CACHE = 'soccho-api-v1';
+const CACHE_NAME = 'soccho-shell-v3';
+const API_CACHE = 'soccho-api-v3';
 const TTL_MS = 5 * 60 * 1000;
 const DB_NAME = 'soccho-offline';
 const STORE = 'tx-queue';
@@ -14,16 +14,23 @@ self.addEventListener('install', (event) => {
           return;
         }
         await cache.put('/', appShell.clone());
-        await cache.put('/home', appShell.clone());
+        await cache.put('/index.html', appShell.clone());
       } catch {
         // Do not fail the service worker install when the shell cannot be prefetched.
       }
     })()
   );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      const names = await caches.keys();
+      await Promise.all(names.filter((name) => ![CACHE_NAME, API_CACHE].includes(name)).map((name) => caches.delete(name)));
+      await self.clients.claim();
+    })()
+  );
 });
 
 function openDb() {
@@ -95,6 +102,45 @@ async function getFreshCached(request) {
   return cached;
 }
 
+function isAppNavigationRequest(request, url) {
+  return (
+    request.mode === 'navigate' &&
+    url.origin === self.location.origin &&
+    !url.pathname.startsWith('/api/') &&
+    !url.pathname.startsWith('/graphql/') &&
+    !url.pathname.startsWith('/oauth/') &&
+    !url.pathname.startsWith('/sw.js') &&
+    !/\.[a-zA-Z0-9]+$/.test(url.pathname)
+  );
+}
+
+async function getAppShellResponse() {
+  const shellRequest = new Request('/index.html');
+  try {
+    const networkShell = await fetch(shellRequest, { cache: 'no-cache' });
+    if (networkShell.ok) {
+      await cacheWithTtl(shellRequest, networkShell.clone());
+      const shellCache = await caches.open(CACHE_NAME);
+      await shellCache.put(shellRequest, networkShell.clone());
+      return networkShell;
+    }
+  } catch {
+    // Fall back to cached shell below when the network is unavailable.
+  }
+
+  const shellCache = await caches.open(CACHE_NAME);
+  const precachedShell = await shellCache.match(shellRequest);
+  if (precachedShell) {
+    return precachedShell;
+  }
+
+  const cachedShell = await getFreshCached(shellRequest);
+  if (cachedShell) {
+    return cachedShell;
+  }
+  return fetch(shellRequest, { cache: 'no-cache' });
+}
+
 function shouldCacheGraphqlPayload(payload) {
   const operationName = String(payload?.operationName || '');
   const query = String(payload?.query || '');
@@ -114,17 +160,17 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  if (req.method === 'GET' && url.pathname === '/home') {
+  if (isAppNavigationRequest(req, url)) {
     event.respondWith(
       (async () => {
         try {
           const network = await fetch(req);
-          if (network.ok) await cacheWithTtl(req, network.clone());
-          return network;
+          if (network.ok) {
+            return network;
+          }
+          return await getAppShellResponse();
         } catch {
-          const cached = await getFreshCached(req);
-          if (cached) return cached;
-          throw new Error('offline');
+          return await getAppShellResponse();
         }
       })()
     );

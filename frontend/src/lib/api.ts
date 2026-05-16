@@ -14,18 +14,34 @@ const api = axios.create({
 let isRefreshing = false;
 let refreshQueue: Array<(token: string | null) => void> = [];
 
-function getAccessToken(): string | null {
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
+function normalizeStoredToken(raw: string | null): string | null {
+  const trimmed = (raw || '').trim().replace(/^["']|["']$/g, '');
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.replace(/^Bearer\s+/i, '').trim() || null;
 }
 
-function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
+export function getAccessToken(): string | null {
+  return normalizeStoredToken(localStorage.getItem(ACCESS_TOKEN_KEY));
+}
+
+export function getRefreshToken(): string | null {
+  return normalizeStoredToken(localStorage.getItem(REFRESH_TOKEN_KEY));
 }
 
 function setTokens(access: string, refresh: string): void {
-  localStorage.setItem(ACCESS_TOKEN_KEY, access);
-  localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
-  const userId = extractUserId(access);
+  const normalizedAccess = normalizeStoredToken(access);
+  const normalizedRefresh = normalizeStoredToken(refresh);
+  if (!normalizedAccess || !normalizedRefresh) {
+    clearTokens();
+    return;
+  }
+
+  localStorage.setItem(ACCESS_TOKEN_KEY, normalizedAccess);
+  localStorage.setItem(REFRESH_TOKEN_KEY, normalizedRefresh);
+  const userId = extractUserId(normalizedAccess);
   if (userId) {
     localStorage.setItem(USER_ID_KEY, userId);
   }
@@ -37,7 +53,7 @@ function clearTokens(): void {
   localStorage.removeItem(USER_ID_KEY);
 }
 
-function extractUserId(token: string): string | null {
+function decodeTokenPayload(token: string): { sub?: string; exp?: number } | null {
   try {
     const [, payload] = token.split('.');
     if (!payload) {
@@ -46,11 +62,14 @@ function extractUserId(token: string): string | null {
 
     const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
     const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-    const decoded = JSON.parse(atob(padded)) as { sub?: string };
-    return decoded.sub || null;
+    return JSON.parse(atob(padded)) as { sub?: string; exp?: number };
   } catch {
     return null;
   }
+}
+
+function extractUserId(token: string): string | null {
+  return decodeTokenPayload(token)?.sub || null;
 }
 
 function flushQueue(token: string | null): void {
@@ -75,9 +94,71 @@ function isPublicAuthEndpoint(url?: string): boolean {
   ].some((endpoint) => url.includes(endpoint));
 }
 
-function redirectToLogin(): void {
+export function isTokenExpired(token: string, skewSeconds = 30): boolean {
+  const exp = decodeTokenPayload(token)?.exp;
+  if (!exp) {
+    return true;
+  }
+
+  return Date.now() >= (exp - skewSeconds) * 1000;
+}
+
+export function redirectToLogin(): void {
   clearTokens();
   window.location.href = '/';
+}
+
+export async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    return null;
+  }
+
+  if (isRefreshing) {
+    return new Promise((resolve) => {
+      refreshQueue.push(resolve);
+    });
+  }
+
+  isRefreshing = true;
+
+  try {
+    const refreshResponse = await axios.post(
+      `${API_URL}/api/auth/refresh/`,
+      { refresh: refreshToken },
+      { withCredentials: false }
+    );
+
+    const newAccess = refreshResponse.data?.access as string | undefined;
+    const newRefresh = refreshResponse.data?.refresh as string | undefined;
+
+    if (!newAccess || !newRefresh) {
+      flushQueue(null);
+      return null;
+    }
+
+    setTokens(newAccess, newRefresh);
+    flushQueue(newAccess);
+    return newAccess;
+  } catch {
+    flushQueue(null);
+    return null;
+  } finally {
+    isRefreshing = false;
+  }
+}
+
+export async function getValidAccessToken(): Promise<string | null> {
+  const token = getAccessToken();
+  if (token && !isTokenExpired(token)) {
+    return token;
+  }
+
+  if (!getRefreshToken()) {
+    return null;
+  }
+
+  return refreshAccessToken();
 }
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -108,47 +189,21 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        refreshQueue.push((token) => {
-          if (!token) {
-            reject(error);
-            return;
-          }
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          resolve(api(originalRequest));
-        });
-      });
-    }
-
     originalRequest._retry = true;
-    isRefreshing = true;
 
     try {
-      const refreshResponse = await axios.post(
-        `${API_URL}/api/auth/refresh/`,
-        { refresh: refreshToken },
-        { withCredentials: false }
-      );
+      const newAccess = await refreshAccessToken();
 
-      const newAccess = refreshResponse.data?.access as string | undefined;
-      const newRefresh = refreshResponse.data?.refresh as string | undefined;
-
-      if (!newAccess || !newRefresh) {
+      if (!newAccess) {
         redirectToLogin();
         return Promise.reject(error);
       }
 
-      setTokens(newAccess, newRefresh);
-      flushQueue(newAccess);
       originalRequest.headers.Authorization = `Bearer ${newAccess}`;
       return api(originalRequest);
     } catch (refreshError) {
-      flushQueue(null);
       redirectToLogin();
       return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
     }
   }
 );

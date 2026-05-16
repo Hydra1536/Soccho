@@ -148,6 +148,9 @@ def _redirect_to_frontend(frontend_origin: str, **params):
 
 
 def _google_callback_url(request) -> str:
+    configured_redirect = getattr(settings, "GOOGLE_OAUTH_REDIRECT_URI", "").strip()
+    if configured_redirect:
+        return configured_redirect
     return _build_public_url(request, "/oauth/google/callback/")
 
 

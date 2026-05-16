@@ -22,29 +22,26 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (hasAccessToken()) {
-      navigate('/home', { replace: true });
-      return;
-    }
-
     const hash = new URLSearchParams(window.location.hash.slice(1));
     const accessToken = hash.get('access_token');
     const refreshToken = hash.get('refresh_token');
     const googleError = hash.get('google_error');
-    if (!accessToken && !refreshToken && !googleError) {
-      return;
-    }
-
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
 
     if (accessToken && refreshToken) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
       persistTokens(accessToken, refreshToken);
       navigate('/home', { replace: true });
       return;
     }
 
     if (googleError) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
       setError(googleError);
+      return;
+    }
+
+    if (hasAccessToken()) {
+      navigate('/home', { replace: true });
     }
   }, [navigate]);
 

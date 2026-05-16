@@ -69,6 +69,7 @@ frontend/dist
     - Destination: `/index.html`
     - Action: `Rewrite`
   - Save and trigger a deploy.
+  - The frontend also ships `frontend/public/_redirects`, which Vite copies into `frontend/dist` during build.
 
 - Declarative Blueprint option:
   - This repo now includes [render.frontend.yaml](d:/Soccho/render.frontend.yaml) with the same SPA rewrite declared in code.
@@ -279,6 +280,14 @@ Set these on `soccho-gateway`:
 - `NOTIFICATION_GRPC_HOST` = internal hostname of `soccho-notification-grpc`
 - `NOTIFICATION_GRPC_PORT` = `8004`
 
+### Auth service env mapping
+
+Set these on `soccho-auth-http`:
+
+- `GOOGLE_CLIENT_ID` = your Google OAuth client id
+- `GOOGLE_CLIENT_SECRET` = your Google OAuth client secret
+- `GOOGLE_OAUTH_REDIRECT_URI` = `https://soccho-gateway.onrender.com/oauth/google/callback/`
+
 ### Social service env mapping
 
 Set these on `soccho-social-http` and `soccho-social-grpc`:
@@ -300,6 +309,7 @@ Set these on `soccho-transaction-http`, `soccho-transaction-grpc`, and `soccho-t
 Set these on `soccho-notification` and `soccho-notification-grpc`:
 
 - `TRANSACTION_HTTP_BASE_URL` = internal URL of `soccho-transaction-http`
+- `AUTH_SECRET_KEY` = the exact same value used by `soccho-auth-http`
 
 ### Frontend env mapping
 

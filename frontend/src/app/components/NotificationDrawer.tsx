@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { X, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { getValidAccessToken } from '../../lib/api';
 
 export interface NotificationItem {
   id: string;
@@ -42,35 +43,42 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
   }, [unreadCount, onUnreadCountChange]);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) return;
+    let cancelled = false;
 
-    const base = import.meta.env.VITE_NOTIFICATION_WS_URL || import.meta.env.VITE_API_URL || 'https://soccho-notification.onrender.com';
-    const wsBase = toWsUrl(base);
-    const ws = new WebSocket(`${wsBase}/ws/notifications/?token=${encodeURIComponent(token)}`);
-    wsRef.current = ws;
+    const connect = async () => {
+      const token = await getValidAccessToken();
+      if (!token || cancelled) return;
 
-    ws.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload?.event === 'transaction.created' || payload?.event === 'notification.push' || payload?.event === 'notification.pending') {
-          const row = payload.notification || {};
-          const item: NotificationItem = {
-            id: String(row.id || crypto.randomUUID()),
-            type: payload?.event === 'transaction.created' ? 'pending' : row.type === 'due_reminder' ? 'reminder' : 'received',
-            title: row.payload?.title || payload?.event || 'Notification',
-            message: row.payload?.body || JSON.stringify(row.payload || {}),
-            timestamp: row.created_at || new Date().toISOString(),
-          };
-          onNotificationsChange?.([item, ...notificationsRef.current]);
+      const base = import.meta.env.VITE_NOTIFICATION_WS_URL || import.meta.env.VITE_API_URL || 'https://soccho-notification.onrender.com';
+      const wsBase = toWsUrl(base);
+      const ws = new WebSocket(`${wsBase}/ws/notifications/?token=${encodeURIComponent(token)}`);
+      wsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload?.event === 'transaction.created' || payload?.event === 'notification.push' || payload?.event === 'notification.pending') {
+            const row = payload.notification || {};
+            const item: NotificationItem = {
+              id: String(row.id || crypto.randomUUID()),
+              type: payload?.event === 'transaction.created' ? 'pending' : row.type === 'due_reminder' ? 'reminder' : 'received',
+              title: row.payload?.title || payload?.event || 'Notification',
+              message: row.payload?.body || JSON.stringify(row.payload || {}),
+              timestamp: row.created_at || new Date().toISOString(),
+            };
+            onNotificationsChange?.([item, ...notificationsRef.current]);
+          }
+        } catch {
+          return;
         }
-      } catch {
-        return;
-      }
+      };
     };
 
+    void connect();
+
     return () => {
-      ws.close();
+      cancelled = true;
+      wsRef.current?.close();
       wsRef.current = null;
     };
   }, [onNotificationsChange]);
