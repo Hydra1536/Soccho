@@ -56,7 +56,7 @@ function GuardedChangePassword() {
   );
 }
 
-export const router = createBrowserRouter([
+const routeConfig = [
   {
     path: '/',
     Component: Login,
@@ -89,4 +89,8 @@ export const router = createBrowserRouter([
     path: '*',
     Component: NotFound,
   },
-]);
+];
+
+export const router = createBrowserRouter(routeConfig, {
+  basename: import.meta.env.BASE_URL || '/',
+});

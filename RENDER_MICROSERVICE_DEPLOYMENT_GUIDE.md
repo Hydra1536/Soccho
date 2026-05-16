@@ -62,6 +62,16 @@ cd frontend && npm install && npm run build
 frontend/dist
 ```
 
+- Redirects/Rewrites (required for SPA routes like `/home`):
+  - Open Render Dashboard -> `soccho-frontend` -> `Redirects/Rewrites`
+  - Add rule:
+    - Source: `/*`
+    - Destination: `/index.html`
+    - Action: `Rewrite`
+  - Save and trigger a deploy.
+
+Without this rewrite, direct navigation/refresh on client-side routes returns `404 Not Found` because Render tries to find a physical file at that path.
+
 ### `soccho-gateway` (Public Web Service)
 
 - Build Command:
