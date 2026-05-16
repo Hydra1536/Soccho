@@ -40,21 +40,26 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "auth_service.urls"
 WSGI_APPLICATION = "auth_service.wsgi.application"
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
 
 
 def _database_config():
-    database_url = os.getenv("DATABASE_URL", "postgresql://soccho:soccho@postgres:5432/soccho").strip()
-    if database_url:
-        parsed = urlparse(database_url)
-        if parsed.scheme in {"postgres", "postgresql"}:
-            return {
-                "ENGINE": "django.db.backends.postgresql",
-                "NAME": parsed.path.lstrip("/"),
-                "USER": parsed.username or "",
-                "PASSWORD": parsed.password or "",
-                "HOST": parsed.hostname or "localhost",
-                "PORT": str(parsed.port or 5432),
-            }
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if not database_url:
+        raise ValueError("DATABASE_URL environment variable is required")
+    parsed = urlparse(database_url)
+    if parsed.scheme in {"postgres", "postgresql"}:
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": parsed.path.lstrip("/"),
+            "USER": parsed.username or "",
+            "PASSWORD": parsed.password or "",
+            "HOST": parsed.hostname or "localhost",
+            "PORT": str(parsed.port or 5432),
+        }
     raise ValueError("DATABASE_URL must use postgres/postgresql scheme")
 
 DATABASES = {
@@ -124,7 +129,7 @@ AXES_COOLOFF_TIME = timedelta(hours=1)
 AXES_LOCK_OUT_AT_FAILURE = True
 AXES_RESET_ON_SUCCESS = True
 AXES_CACHE = "default"
-AXES_ONLY_USER_FAILURES = False
+AXES_LOCKOUT_PARAMETERS = ["ip_address"]
 AXES_VERBOSE = False
 
 SOCIAL_AUTH_JSONFIELD_ENABLED = True
