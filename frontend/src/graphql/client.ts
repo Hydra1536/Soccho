@@ -29,14 +29,21 @@ const authAndServiceLink = new ApolloLink((operation: Operation, forward: NextLi
         service?: GatewayService;
       };
       const service = currentContext.service || 'social';
-      const token = await getValidAccessToken();
+      const rawToken = await getValidAccessToken();
+      const token = rawToken?.replace(/^Bearer\s+/i, '').trim() || '';
+      const authorizationValue = token ? `Bearer ${token}` : '';
 
       operation.setContext({
         ...currentContext,
         headers: {
           ...(currentContext.headers || {}),
           'X-Service': service,
-          authorization: token ? `Bearer ${token}` : '',
+          ...(authorizationValue
+            ? {
+                authorization: authorizationValue,
+                Authorization: authorizationValue,
+              }
+            : {}),
         },
       });
 
