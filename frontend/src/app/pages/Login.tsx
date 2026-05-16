@@ -5,7 +5,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
 import { googleLogin, login, register, verifyOTP, OTPContext } from '../../lib/auth';
-import { getApiErrorMessage, persistTokens } from '../../lib/api';
+import { getApiErrorMessage, hasAccessToken, persistTokens } from '../../lib/api';
 
 type AuthScreen = 'login' | 'register' | 'otp';
 
@@ -22,6 +22,11 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (hasAccessToken()) {
+      navigate('/home', { replace: true });
+      return;
+    }
+
     const hash = new URLSearchParams(window.location.hash.slice(1));
     const accessToken = hash.get('access_token');
     const refreshToken = hash.get('refresh_token');

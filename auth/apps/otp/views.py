@@ -15,6 +15,7 @@ INVALID_CREDENTIALS = {"detail": "Invalid credentials"}
 
 class VerifyOTPView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
     def post(self, request):

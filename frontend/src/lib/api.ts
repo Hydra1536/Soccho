@@ -66,6 +66,7 @@ function isPublicAuthEndpoint(url?: string): boolean {
   return [
     '/api/auth/login/',
     '/api/auth/register/',
+    '/api/auth/logout/',
     '/api/auth/otp/verify/',
     '/api/auth/forgot-password/',
     '/api/auth/change-password/request/',
@@ -81,7 +82,7 @@ function redirectToLogin(): void {
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = getAccessToken();
-  if (token) {
+  if (token && !isPublicAuthEndpoint(config.url)) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;

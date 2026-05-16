@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 
 class PublicEndpointMixin:
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
 
