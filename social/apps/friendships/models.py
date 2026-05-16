@@ -37,7 +37,7 @@ class Friendship(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=['requester_id', 'status']),
-            models.Index(fields=['addressee_id', 'status']),
-            models.Index(fields=['created_at']),
+            models.Index(fields=['requester_id', 'status'], name='friend_req_status_idx'),
+            models.Index(fields=['addressee_id', 'status'], name='friend_addr_status_idx'),
+            models.Index(fields=['created_at'], name='friend_created_idx'),
         ]

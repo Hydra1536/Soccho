@@ -24,8 +24,8 @@ class Notification(models.Model):
     class Meta:
         db_table = 'notifications'
         indexes = [
-            models.Index(fields=['recipient_id', 'is_cleared', 'created_at']),
-            models.Index(fields=['type', 'created_at']),
+            models.Index(fields=['recipient_id', 'is_cleared', 'created_at'], name='notif_rec_clear_created_idx'),
+            models.Index(fields=['type', 'created_at'], name='notif_type_created_idx'),
         ]
 
     @property

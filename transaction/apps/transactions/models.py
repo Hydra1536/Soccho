@@ -30,7 +30,7 @@ class Transaction(models.Model):
     class Meta:
         db_table = 'transactions'
         indexes = [
-            models.Index(fields=['friendship_id', 'status']),
-            models.Index(fields=['borrower_id', 'status']),
-            models.Index(fields=['due_date']),
+            models.Index(fields=['friendship_id', 'status'], name='txn_friend_status_idx'),
+            models.Index(fields=['borrower_id', 'status'], name='txn_borrower_status_idx'),
+            models.Index(fields=['due_date'], name='txn_due_date_idx'),
         ]
