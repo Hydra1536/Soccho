@@ -49,6 +49,7 @@ export default function Home() {
     data: summaryData,
     previousData: previousSummaryData,
     loading: summaryLoading,
+    error: summaryError,
   } = useQuery<{ dashboardSummary: DashboardSummaryNode }>(GET_DASHBOARD_SUMMARY, {
     variables: { userId },
     skip: !userId,
@@ -182,6 +183,7 @@ export default function Home() {
             Summary
           </h2>
           {summaryLoading && !summary && <p className="text-sm text-[#6B7280] mb-4">Loading summary...</p>}
+          {summaryError && !summary && <p className="text-sm text-[#B45309] mb-4">Unable to load summary right now.</p>}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <ResponsiveContainer width="100%" height={150}>

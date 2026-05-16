@@ -1,7 +1,7 @@
 import { ApolloClient, ApolloLink, DefaultOptions, HttpLink, InMemoryCache } from '@apollo/client';
 import { Observable } from '@apollo/client/core';
 import { onError } from '@apollo/client/link/error';
-import { getValidAccessToken, redirectToLogin } from '../lib/api';
+import { getValidAccessToken } from '../lib/api';
 
 export type GatewayService = 'social' | 'transaction' | 'auth' | 'notification';
 
@@ -29,14 +29,6 @@ const authAndServiceLink = new ApolloLink((operation, forward) => {
       const service = currentContext.service || 'social';
       const token = await getValidAccessToken();
 
-      if (!token) {
-        if (typeof window !== 'undefined') {
-          redirectToLogin();
-        }
-        observer.error(new Error('Authentication required'));
-        return;
-      }
-
       operation.setContext({
         ...currentContext,
         headers: {
@@ -54,9 +46,6 @@ const authAndServiceLink = new ApolloLink((operation, forward) => {
     };
 
     void run().catch((error) => {
-      if (typeof window !== 'undefined') {
-        redirectToLogin();
-      }
       observer.error(error);
     });
 
@@ -71,12 +60,6 @@ const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
     console.error(`GraphQL error in ${operation.operationName || 'anonymous operation'}`, graphQLErrors);
   }
   if (networkError) {
-    const statusCode = typeof networkError === 'object' && networkError && 'statusCode' in networkError
-      ? (networkError as { statusCode?: number }).statusCode
-      : undefined;
-    if (statusCode === 401 && typeof window !== 'undefined') {
-      redirectToLogin();
-    }
     console.error(`Network error in ${operation.operationName || 'anonymous operation'}`, networkError);
   }
 });

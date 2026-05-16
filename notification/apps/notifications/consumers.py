@@ -82,6 +82,11 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         token = parse_qs(raw_qs).get('token', [None])[0]
         if not token:
             return None
+        token = str(token).strip()
+        if token.lower().startswith('bearer '):
+            token = token.split(' ', 1)[1].strip()
+        if not token:
+            return None
         try:
             payload = jwt.decode(token, settings.AUTH_SECRET_KEY, algorithms=['HS256'])
             return str(payload.get('sub', ''))
