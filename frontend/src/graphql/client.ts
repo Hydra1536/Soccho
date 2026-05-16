@@ -1,6 +1,5 @@
-import { ApolloClient, DefaultOptions, HttpLink, InMemoryCache, from } from '@apollo/client';
+import { ApolloClient, ApolloLink, DefaultOptions, HttpLink, InMemoryCache } from '@apollo/client';
 import { onError } from '@apollo/client/link/error';
-import { setContext } from '@apollo/client/link/context';
 import { ACCESS_TOKEN_KEY } from '../lib/api';
 
 export type GatewayService = 'social' | 'transaction' | 'auth' | 'notification';
@@ -12,19 +11,28 @@ const httpLink = new HttpLink({
   credentials: 'include',
 });
 
-const authAndServiceLink = setContext((operation, context) => {
+const authAndServiceLink = new ApolloLink((operation, forward) => {
   const token = typeof window === 'undefined' ? null : localStorage.getItem(ACCESS_TOKEN_KEY);
-  const service = (operation.getContext().service as GatewayService | undefined) || 'social';
-  const headers = {
-    ...(context.headers || {}),
+  const currentContext = operation.getContext() as {
+    headers?: Record<string, string>;
+    service?: GatewayService;
+  };
+  const service = currentContext.service || 'social';
+  const headers: Record<string, string> = {
+    ...(currentContext.headers || {}),
     'X-Service': service,
-  } as Record<string, string>;
+  };
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  return { headers };
+  operation.setContext({
+    ...currentContext,
+    headers,
+  });
+
+  return forward(operation);
 });
 
 const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
@@ -49,7 +57,7 @@ const defaultOptions: DefaultOptions = {
 };
 
 export const apolloClient = new ApolloClient({
-  link: from([errorLink, authAndServiceLink, httpLink]),
+  link: ApolloLink.from([errorLink, authAndServiceLink, httpLink]),
   cache: new InMemoryCache(),
   defaultOptions,
 });

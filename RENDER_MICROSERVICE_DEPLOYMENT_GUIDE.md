@@ -70,6 +70,10 @@ frontend/dist
     - Action: `Rewrite`
   - Save and trigger a deploy.
 
+- Declarative Blueprint option:
+  - This repo now includes [render.frontend.yaml](d:/Soccho/render.frontend.yaml) with the same SPA rewrite declared in code.
+  - In Render, create or update a Blueprint and set the Blueprint path to `render.frontend.yaml` if you want Render to manage this rewrite from the repo instead of only through the dashboard.
+
 Without this rewrite, direct navigation/refresh on client-side routes returns `404 Not Found` because Render tries to find a physical file at that path.
 
 ### `soccho-gateway` (Public Web Service)
