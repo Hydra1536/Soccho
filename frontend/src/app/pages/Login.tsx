@@ -93,10 +93,15 @@ export default function Login() {
     }
   };
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     setError(null);
     setLoading(true);
-    void googleLogin();
+    try {
+      await googleLogin((statusMessage) => setError(statusMessage));
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Google sign-in is temporarily unavailable. Please try again.'));
+      setLoading(false);
+    }
   };
 
   const slideVariants = {

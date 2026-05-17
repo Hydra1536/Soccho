@@ -3,6 +3,7 @@ UNPROTECTED_PREFIXES = (
     "/api/auth/login",
     "/api/auth/register",
     "/api/auth/refresh",
+    "/api/auth/health",
     "/api/auth/forgot-password",
     "/api/auth/otp/verify",
     "/oauth",

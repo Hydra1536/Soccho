@@ -1,6 +1,6 @@
-# Soccho Render Deployment Guide (HTTP-Only)
+# Soccho Render Deployment Guide (HTTP-Only + Cold-Start Resilience)
 
-This repository is now configured for HTTP-only service communication.
+This repository uses HTTP-only service communication and includes Render Free cold-start mitigation.
 
 ## 1. Important repo rule
 
@@ -8,7 +8,25 @@ Keep each Render service rooted at the repository root.
 
 Do not set a Render `rootDir` like `auth/` or `gateway/` because this monorepo uses shared files outside service folders.
 
-## 2. Recommended Render service layout
+## 2. Render Free behavior and tradeoff
+
+Render Free web services can spin down after ~15 minutes of inactivity and take time to wake.
+
+Primary mitigation in this repo:
+
+- gateway now returns controlled `503` for upstream warm-up failures (instead of opaque `502`),
+- OAuth proxy has longer timeout and bounded retry.
+
+Optional mitigation:
+
+- keepalive worker can ping services periodically to reduce cold starts.
+
+Tradeoff:
+
+- keepalive reduces cold starts but consumes free instance hours and bandwidth.
+- keepalive does not prevent platform maintenance or restart events.
+
+## 3. Recommended Render service layout
 
 ### Public services
 
@@ -23,16 +41,17 @@ Do not set a Render `rootDir` like `auth/` or `gateway/` because this monorepo u
 - `soccho-social-http` (Web Service)
 - `soccho-transaction-http` (Web Service)
 
-### Background worker
+### Background workers
 
 - `soccho-transaction-worker` (Background Worker)
+- `soccho-keepalive-worker` (Background Worker, optional)
 
 ### Managed data services
 
 - Render Postgres
 - Render Key Value (Redis)
 
-## 3. Exact commands per service
+## 4. Exact commands per service
 
 All commands below assume the service root is the repository root.
 
@@ -48,6 +67,7 @@ frontend/dist
 ```
 
 Add SPA rewrite:
+
 - Source: `/*`
 - Destination: `/index.html`
 - Action: `Rewrite`
@@ -149,7 +169,18 @@ pip install -r transaction/requirements.txt
 cd transaction && celery -A transaction_service worker -B
 ```
 
-## 4. Required environment variables
+### soccho-keepalive-worker (optional)
+
+- Build Command:
+```bash
+pip install -r keepalive/requirements.txt
+```
+- Start Command:
+```bash
+python keepalive/worker.py
+```
+
+## 5. Required environment variables
 
 Set these service URLs in `soccho-gateway`:
 
@@ -176,8 +207,42 @@ Set these shared values across backend services:
 
 Important: `AUTH_SECRET_KEY` must be identical in `soccho-auth-http`, `soccho-gateway`, and `soccho-notification`.
 
-## 5. Post-deploy verification
+### Keepalive worker env (optional)
+
+- `KEEPALIVE_ENABLED` (`true` or `false`)
+- `KEEPALIVE_INTERVAL_SECONDS` (default `600`)
+- `KEEPALIVE_TIMEOUT_SECONDS` (default `15`)
+- `KEEPALIVE_JITTER_SECONDS` (default `0`)
+- `KEEPALIVE_TARGETS` (comma-separated health URLs)
+
+Default targets are:
+
+- `https://soccho-gateway.onrender.com/healthz`
+- `https://soccho-auth.onrender.com/api/auth/health/`
+- `https://soccho-social.onrender.com/health/`
+- `https://soccho-transaction.onrender.com/health/`
+- `https://soccho-notification.onrender.com/health/`
+
+## 6. Post-deploy verification
+
+### Baseline checks
 
 - `https://soccho-gateway.onrender.com/healthz` returns 200.
+- `https://soccho-auth.onrender.com/api/auth/health/` returns 200.
 - Login succeeds and frontend receives access/refresh tokens.
 - Home page loads summary/friends without 401 loops.
+
+### Cold-start checks
+
+1. Let services idle for at least 15 minutes.
+2. Attempt Google sign-in.
+3. Confirm:
+   - frontend shows wake-up messaging/retry flow instead of crashing,
+   - gateway does not emit opaque `502` for OAuth warm-up path,
+   - eventual redirect to Google works once auth is awake.
+
+### Log checklist
+
+- Gateway logs show structured upstream warm-up warnings on timeout/connection failures.
+- OAuth retries are visible at most once per request path.
+- Keepalive worker logs periodic probe results without process crash.

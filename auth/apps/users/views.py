@@ -582,6 +582,11 @@ class MeView(PublicEndpointMixin, APIView):
         )
 
 
+class HealthView(PublicEndpointMixin, APIView):
+    def get(self, _request):
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+
 class GoogleOAuthView(PublicEndpointMixin, APIView):
     def post(self, request):
         id_token = request.data.get("id_token")

@@ -14,6 +14,14 @@ export type CurrentUser = {
   is_verified: boolean;
 };
 
+type WarmupStatusCallback = (statusMessage: string) => void;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 export async function login(email: string, password: string): Promise<void> {
   const { data } = await api.post<TokenPair>('/api/auth/login/', { email, password });
   persistTokens(data.access, data.refresh);
@@ -68,12 +76,26 @@ export async function logout(): Promise<void> {
   }
 }
 
-export async function googleLogin(): Promise<void> {
-  const params = new URLSearchParams({
-    frontend_origin: window.location.origin,
-  });
-  window.location.assign(`${API_URL}/oauth/google/start/?${params.toString()}`);
-  return new Promise(() => undefined);
+export async function googleLogin(onWarmupStatus?: WarmupStatusCallback): Promise<void> {
+  const attempts = 3;
+  const params = new URLSearchParams({ frontend_origin: window.location.origin });
+  const oauthStartUrl = `${API_URL}/oauth/google/start/?${params.toString()}`;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    onWarmupStatus?.(`Waking backend services... (${attempt}/${attempts})`);
+    try {
+      await api.get('/healthz', { timeout: 20000 });
+      await api.get('/api/auth/health/', { timeout: 45000 });
+      window.location.assign(oauthStartUrl);
+      return new Promise(() => undefined);
+    } catch {
+      if (attempt < attempts) {
+        await wait(1200 * attempt);
+      }
+    }
+  }
+
+  throw new Error('Services are still waking up. Please try Google sign-in again in a few seconds.');
 }
 
 export async function fetchCurrentUser(): Promise<CurrentUser> {
