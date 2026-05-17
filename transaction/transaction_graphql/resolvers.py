@@ -36,7 +36,7 @@ def _requester_id(info):
     return str(info.context.headers.get('x-user-id', ''))
 
 
-async def resolve_friend_ledger(_root, info, friendship_id):
+def resolve_friend_ledger(_root, info, friendship_id):
     requester_id = _requester_id(info)
     if not requester_id:
         raise Exception('Unauthorized')
@@ -79,7 +79,7 @@ async def resolve_friend_ledger(_root, info, friendship_id):
     )
 
 
-async def resolve_dashboard_summary(_root, info, user_id):
+def resolve_dashboard_summary(_root, info, user_id):
     requester_id = _requester_id(info)
     if str(user_id) != requester_id:
         raise Exception('Forbidden')

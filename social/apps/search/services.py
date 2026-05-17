@@ -41,7 +41,7 @@ def get_search_history(user_id: str) -> list[str]:
     return _redis_client().lrange(key, 0, 49)
 
 
-async def get_loyalty_score(user_id: str) -> float:
+def get_loyalty_score(user_id: str) -> float:
     cache_key = f'loyalty_score:{user_id}'
     client = _redis_client()
 
@@ -68,7 +68,7 @@ async def get_loyalty_score(user_id: str) -> float:
     return score
 
 
-async def resolve_username(user_id: str) -> str:
+def resolve_username(user_id: str) -> str:
     user = SearchableUser.objects.filter(id=user_id).first()
     return user.username if user is not None else ''
 

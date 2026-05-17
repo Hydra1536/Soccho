@@ -1,4 +1,3 @@
-from asgiref.sync import async_to_sync
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -41,7 +40,7 @@ class UserSearchView(APIView):
             {
                 'id': str(user.id),
                 'username': user.username,
-                'loyalty_score': async_to_sync(get_loyalty_score)(str(user.id)),
+                'loyalty_score': get_loyalty_score(str(user.id)),
             }
             for user in matches
         ]

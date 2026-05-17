@@ -1,4 +1,3 @@
-from asgiref.sync import async_to_sync
 from django.db.models import Q
 
 import graphene
@@ -34,7 +33,7 @@ class FriendListQuery(graphene.ObjectType):
             str(user_id_value): username
             for user_id_value, username in SearchableUser.objects.filter(id__in=friend_ids).values_list('id', 'username')
         }
-        loyalty_score = async_to_sync(get_loyalty_score)(user_id)
+        loyalty_score = get_loyalty_score(user_id)
 
         rows = []
         for edge in queryset:
