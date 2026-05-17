@@ -31,6 +31,8 @@ function toWsUrl(httpUrl: string): string {
 export function NotificationDrawer({ isOpen, onClose, notifications, onNotificationsChange, onUnreadCountChange }: NotificationDrawerProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const notificationsRef = useRef<NotificationItem[]>(notifications);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const reconnectAttemptRef = useRef(0);
 
   useEffect(() => {
     notificationsRef.current = notifications;
@@ -44,15 +46,46 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
 
   useEffect(() => {
     let cancelled = false;
+    const maxReconnectAttempts = 6;
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (cancelled) {
+        return;
+      }
+      if (reconnectAttemptRef.current >= maxReconnectAttempts) {
+        return;
+      }
+
+      const delay = Math.min(2000 * (reconnectAttemptRef.current + 1), 10000);
+      reconnectAttemptRef.current += 1;
+      clearReconnectTimer();
+      reconnectTimerRef.current = window.setTimeout(() => {
+        void connect();
+      }, delay);
+    };
 
     const connect = async () => {
       const token = await getValidAccessToken();
-      if (!token || cancelled) return;
+      if (!token || cancelled) {
+        scheduleReconnect();
+        return;
+      }
 
-      const base = import.meta.env.VITE_NOTIFICATION_WS_URL || import.meta.env.VITE_API_URL || 'https://soccho-notification.onrender.com';
+      const base = import.meta.env.VITE_NOTIFICATION_WS_URL || 'https://soccho-notification.onrender.com';
       const wsBase = toWsUrl(base);
       const ws = new WebSocket(`${wsBase}/ws/notifications/?token=${encodeURIComponent(token)}`);
       wsRef.current = ws;
+
+      ws.onopen = () => {
+        reconnectAttemptRef.current = 0;
+      };
 
       ws.onmessage = (event) => {
         try {
@@ -72,12 +105,24 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
           return;
         }
       };
+
+      ws.onerror = () => {
+        scheduleReconnect();
+      };
+
+      ws.onclose = () => {
+        if (wsRef.current === ws) {
+          wsRef.current = null;
+        }
+        scheduleReconnect();
+      };
     };
 
     void connect();
 
     return () => {
       cancelled = true;
+      clearReconnectTimer();
       wsRef.current?.close();
       wsRef.current = null;
     };

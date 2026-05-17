@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Search, X, Clock, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import axios from 'axios';
-import api from '../../lib/api';
+import api, { USER_ID_KEY } from '../../lib/api';
 import { Avatar } from '../components/Avatar';
 import { BottomNav } from '../components/BottomNav';
 
@@ -30,6 +30,8 @@ export default function FindFriends() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchErrorMessage, setSearchErrorMessage] = useState('');
+  const [requestedUserIds, setRequestedUserIds] = useState<Record<string, boolean>>({});
+  const [requestInFlight, setRequestInFlight] = useState<Record<string, boolean>>({});
 
   const fetchSearchResults = async (query: string) => {
     setIsSearching(true);
@@ -97,6 +99,48 @@ export default function FindFriends() {
     return bounded;
   };
 
+  const handleAddFriend = async (person: SearchResult) => {
+    const targetId = String(person.user_id || person.id || '').trim();
+    if (!targetId) {
+      setSearchErrorMessage('Unable to send request for this user.');
+      return;
+    }
+
+    const currentUserId = (localStorage.getItem(USER_ID_KEY) || '').trim();
+    if (currentUserId && currentUserId === targetId) {
+      setSearchErrorMessage('You cannot send a friend request to yourself.');
+      return;
+    }
+
+    setRequestInFlight((prev) => ({ ...prev, [targetId]: true }));
+    setSearchErrorMessage('');
+    try {
+      await api.post('/api/social/send-request/', { user_id: targetId });
+      setRequestedUserIds((prev) => ({ ...prev, [targetId]: true }));
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        setRequestedUserIds((prev) => ({ ...prev, [targetId]: true }));
+      } else {
+        setSearchErrorMessage(getErrorMessage(error));
+      }
+    } finally {
+      setRequestInFlight((prev) => ({ ...prev, [targetId]: false }));
+    }
+  };
+
+  const getErrorMessage = (error: unknown): string => {
+    if (axios.isAxiosError(error)) {
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'string' && detail.trim()) {
+        return detail;
+      }
+      if (error.response?.status === 401) {
+        return 'Session expired. Please sign in again.';
+      }
+    }
+    return 'Unable to send friend request right now.';
+  };
+
   return (
     <div className="min-h-screen bg-[#F3F4F6] pb-20">
       <div className="bg-white border-b border-[#E5E7EB] sticky top-0 z-10">
@@ -153,7 +197,12 @@ export default function FindFriends() {
             {isSearching && <p className="text-sm text-[#6B7280] mb-3">Searching...</p>}
             {searchErrorMessage && <p className="text-sm text-[#B45309] mb-3">{searchErrorMessage}</p>}
             <div className="space-y-3">
-              {searchResults.map((person, idx) => (
+              {searchResults.map((person, idx) => {
+                const targetId = String(person.user_id || person.id || '').trim();
+                const isRequested = targetId ? !!requestedUserIds[targetId] : false;
+                const isLoading = targetId ? !!requestInFlight[targetId] : false;
+
+                return (
                 <div key={person.user_id || person.id || idx} className="bg-white rounded-2xl p-4 shadow-sm">
                   <div className="flex items-center gap-3">
                     <Avatar name={person.username || person.name || `Friend ${idx + 1}`} size="medium" />
@@ -169,12 +218,22 @@ export default function FindFriends() {
                         <p className="text-xs text-[#6B7280] mt-1">Loyalty Score</p>
                       </div>
                     </div>
-                    <button className="px-4 py-2 bg-[#4F46E5] text-white rounded-full text-sm font-medium hover:bg-[#3730A3] transition-colors">
-                      Add
+                    <button
+                      onClick={() => void handleAddFriend(person)}
+                      disabled={isRequested || isLoading || !targetId}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                        isRequested
+                          ? 'bg-[#E5E7EB] text-[#6B7280]'
+                          : isLoading
+                            ? 'bg-[#A5B4FC] text-white'
+                            : 'bg-[#4F46E5] text-white hover:bg-[#3730A3]'
+                      }`}
+                    >
+                      {isRequested ? 'Requested' : isLoading ? 'Sending...' : 'Add'}
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         )}

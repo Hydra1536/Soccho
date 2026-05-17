@@ -94,7 +94,7 @@ def run() -> None:
     _start_port_health_server_if_needed()
     enabled = _env_bool("KEEPALIVE_ENABLED", True)
     interval_seconds = float(os.getenv("KEEPALIVE_INTERVAL_SECONDS", "600"))
-    timeout_seconds = float(os.getenv("KEEPALIVE_TIMEOUT_SECONDS", "15"))
+    timeout_seconds = float(os.getenv("KEEPALIVE_TIMEOUT_SECONDS", "20"))
     jitter_seconds = max(0.0, float(os.getenv("KEEPALIVE_JITTER_SECONDS", "0")))
     targets = _targets_from_env()
 
