@@ -1,9 +1,11 @@
+from django.db import DatabaseError
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.search.models import SearchableUser
 from apps.search.services import (
+    fallback_search_usernames,
     fuzzy_search_usernames,
     get_loyalty_score,
     get_search_history,
@@ -34,7 +36,10 @@ class UserSearchView(APIView):
         save_search_history(user_id, query)
 
         queryset = SearchableUser.objects.exclude(id=user_id)
-        matches = fuzzy_search_usernames(queryset, query)[:20]
+        try:
+            matches = list(fuzzy_search_usernames(queryset, query)[:20])
+        except DatabaseError:
+            matches = list(fallback_search_usernames(queryset, query)[:20])
 
         payload = [
             {

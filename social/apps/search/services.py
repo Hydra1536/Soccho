@@ -5,6 +5,7 @@ from typing import Any
 
 import redis
 from django.contrib.postgres.search import TrigramSimilarity
+from django.db import DatabaseError
 
 from django.conf import settings
 
@@ -24,47 +25,68 @@ def fuzzy_search_usernames(queryset, query: str):
     )
 
 
+def fallback_search_usernames(queryset, query: str):
+    return queryset.filter(username__icontains=query).order_by('username')
+
+
 def save_search_history(user_id: str, query: str) -> None:
     key = f'search_history:{user_id}'
     payload = json.dumps({'query': query, 'ts': int(time.time())})
 
-    client = _redis_client()
-    pipe = client.pipeline()
-    pipe.lpush(key, payload)
-    pipe.ltrim(key, 0, 49)
-    pipe.expire(key, 60 * 60 * 24)
-    pipe.execute()
+    try:
+        client = _redis_client()
+        pipe = client.pipeline()
+        pipe.lpush(key, payload)
+        pipe.ltrim(key, 0, 49)
+        pipe.expire(key, 60 * 60 * 24)
+        pipe.execute()
+    except redis.RedisError:
+        # Search should still work when Redis is unavailable.
+        return None
 
 
 def get_search_history(user_id: str) -> list[str]:
     key = f'search_history:{user_id}'
-    return _redis_client().lrange(key, 0, 49)
+    try:
+        return _redis_client().lrange(key, 0, 49)
+    except redis.RedisError:
+        return []
 
 
 def get_loyalty_score(user_id: str) -> float:
     cache_key = f'loyalty_score:{user_id}'
-    client = _redis_client()
+    client = None
+    try:
+        client = _redis_client()
+        cached = client.get(cache_key)
+        if cached is not None:
+            return float(cached)
+    except redis.RedisError:
+        client = None
 
-    cached = client.get(cache_key)
-    if cached is not None:
-        return float(cached)
-
-    confirmed = SearchableTransaction.objects.filter(
-        status=SearchableTransaction.STATUS_CONFIRMED,
-        is_deleted=False,
-    )
-    given_rows = list(confirmed.filter(lender_id=user_id).only('amount'))
-    lent_rows = list(confirmed.filter(borrower_id=user_id).only('amount'))
-    total_given = float(sum((row.amount for row in given_rows), start=Decimal('0')))
-    total_lent = float(sum((row.amount for row in lent_rows), start=Decimal('0')))
-    total_transactions = float(len(given_rows) + len(lent_rows))
+    try:
+        confirmed = SearchableTransaction.objects.filter(
+            status=SearchableTransaction.STATUS_CONFIRMED,
+            is_deleted=False,
+        )
+        given_rows = list(confirmed.filter(lender_id=user_id).only('amount'))
+        lent_rows = list(confirmed.filter(borrower_id=user_id).only('amount'))
+        total_given = float(sum((row.amount for row in given_rows), start=Decimal('0')))
+        total_lent = float(sum((row.amount for row in lent_rows), start=Decimal('0')))
+        total_transactions = float(len(given_rows) + len(lent_rows))
+    except DatabaseError:
+        return 0.0
 
     if total_transactions <= 0:
         score = 0.0
     else:
         score = (total_given - total_lent) / total_transactions
 
-    client.setex(cache_key, 60 * 15, str(score))
+    if client is not None:
+        try:
+            client.setex(cache_key, 60 * 15, str(score))
+        except redis.RedisError:
+            pass
     return score
 
 
