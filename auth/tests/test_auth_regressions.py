@@ -271,6 +271,50 @@ def test_change_password_request_sends_otp_instead_of_changing_password(monkeypa
     assert check_password("newpass123", cached_hash) is True
 
 
+def test_google_oauth_username_collision_generates_unique_suffix(monkeypatch):
+    class FilterResult:
+        def __init__(self, *, first_value=None, exists_value=False):
+            self._first_value = first_value
+            self._exists_value = exists_value
+
+        def first(self):
+            return self._first_value
+
+        def exists(self):
+            return self._exists_value
+
+    existing_usernames = {"piqu"}
+    created = {}
+
+    def fake_filter(**kwargs):
+        if "google_sub" in kwargs:
+            return FilterResult(first_value=None)
+        if "username" in kwargs:
+            return FilterResult(exists_value=kwargs["username"] in existing_usernames)
+        raise AssertionError(f"Unexpected filter kwargs: {kwargs}")
+
+    def fake_create(**kwargs):
+        created.update(kwargs)
+        existing_usernames.add(kwargs["username"])
+        return SimpleNamespace(id="user-2", **kwargs)
+
+    monkeypatch.setattr(user_views, "_get_user_by_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(user_views.User.objects, "filter", fake_filter)
+    monkeypatch.setattr(user_views.User.objects, "create", fake_create)
+
+    payload = {
+        "sub": "google-sub-123",
+        "email": "oauth-user@example.com",
+        "name": "piqu",
+    }
+    user = user_views._google_user_from_payload(payload)
+
+    assert user.username == "piqu_1"
+    assert created["username"] == "piqu_1"
+    assert created["password_hash"] is None
+    assert created["google_sub"] == "google-sub-123"
+
+
 def test_send_otp_email_posts_emailjs_payload(monkeypatch):
     captured = {}
 
