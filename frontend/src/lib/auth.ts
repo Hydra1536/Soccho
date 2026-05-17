@@ -57,7 +57,11 @@ export async function logout(): Promise<void> {
   const refresh = getRefreshToken();
   try {
     if (refresh) {
-      await api.post('/api/auth/logout/', { refresh });
+      try {
+        await api.post('/api/auth/logout/', { refresh });
+      } catch {
+        // A revoked or already-rotated refresh token should not block local sign-out.
+      }
     }
   } finally {
     dropTokens();

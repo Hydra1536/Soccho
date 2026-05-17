@@ -121,11 +121,8 @@ function isPublicAuthEndpoint(url?: string): boolean {
   return [
     '/api/auth/login/',
     '/api/auth/register/',
-    '/api/auth/logout/',
     '/api/auth/otp/verify/',
     '/api/auth/forgot-password/',
-    '/api/auth/change-password/request/',
-    '/api/auth/change-password/',
     '/oauth/',
   ].some((endpoint) => url.includes(endpoint));
 }
