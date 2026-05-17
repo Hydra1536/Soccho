@@ -1,10 +1,10 @@
 import json
 import time
+from decimal import Decimal
 from typing import Any
 
 import redis
 from django.contrib.postgres.search import TrigramSimilarity
-from django.db.models import Sum
 
 from django.conf import settings
 
@@ -53,11 +53,11 @@ def get_loyalty_score(user_id: str) -> float:
         status=SearchableTransaction.STATUS_CONFIRMED,
         is_deleted=False,
     )
-    total_given = float((confirmed.filter(lender_id=user_id).aggregate(v=Sum('amount'))['v'] or 0.0))
-    total_lent = float((confirmed.filter(borrower_id=user_id).aggregate(v=Sum('amount'))['v'] or 0.0))
-    total_transactions = float(
-        confirmed.filter(lender_id=user_id).count() + confirmed.filter(borrower_id=user_id).count()
-    )
+    given_rows = list(confirmed.filter(lender_id=user_id).only('amount'))
+    lent_rows = list(confirmed.filter(borrower_id=user_id).only('amount'))
+    total_given = float(sum((row.amount for row in given_rows), start=Decimal('0')))
+    total_lent = float(sum((row.amount for row in lent_rows), start=Decimal('0')))
+    total_transactions = float(len(given_rows) + len(lent_rows))
 
     if total_transactions <= 0:
         score = 0.0

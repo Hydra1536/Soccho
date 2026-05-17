@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 import graphene
-from django.db.models import Q, Sum
+from django.db.models import Q
 
 from apps.balances.models import Balance
 from apps.transactions.models import Transaction
@@ -85,9 +85,11 @@ def resolve_dashboard_summary(_root, info, user_id):
         raise Exception('Forbidden')
 
     qs = Transaction.objects.filter(is_deleted=False).filter(Q(lender_id=user_id) | Q(borrower_id=user_id))
-    total_lent = qs.filter(lender_id=user_id, status=Transaction.STATUS_CONFIRMED).aggregate(v=Sum('amount'))['v'] or Decimal('0')
-    total_borrowed = qs.filter(borrower_id=user_id, status=Transaction.STATUS_CONFIRMED).aggregate(v=Sum('amount'))['v'] or Decimal('0')
-    total_confirmed = qs.filter(status=Transaction.STATUS_CONFIRMED).count()
+    lent_rows = list(qs.filter(lender_id=user_id, status=Transaction.STATUS_CONFIRMED).only('amount'))
+    borrowed_rows = list(qs.filter(borrower_id=user_id, status=Transaction.STATUS_CONFIRMED).only('amount'))
+    total_lent = sum((row.amount for row in lent_rows), start=Decimal('0'))
+    total_borrowed = sum((row.amount for row in borrowed_rows), start=Decimal('0'))
+    total_confirmed = len(lent_rows) + len(borrowed_rows)
 
     return DashboardSummaryType(
         user_id=user_id,
