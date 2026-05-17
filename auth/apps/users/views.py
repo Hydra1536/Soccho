@@ -556,7 +556,7 @@ class LogoutView(PublicEndpointMixin, APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class MeView(APIView):
+class MeView(PublicEndpointMixin, APIView):
     def get(self, request):
         try:
             user = _get_authenticated_user(request)
