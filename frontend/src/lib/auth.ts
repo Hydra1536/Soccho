@@ -12,6 +12,7 @@ export type CurrentUser = {
   username: string;
   email: string;
   is_verified: boolean;
+  has_password: boolean;
 };
 
 type WarmupStatusCallback = (statusMessage: string) => void;

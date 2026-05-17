@@ -11,6 +11,7 @@ export default function Profile() {
   const [userName, setUserName] = useState(localStorage.getItem(USERNAME_KEY) || '');
   const [userEmail, setUserEmail] = useState(localStorage.getItem(EMAIL_KEY) || '');
   const [profileError, setProfileError] = useState('');
+  const [canChangePassword, setCanChangePassword] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -24,6 +25,7 @@ export default function Profile() {
 
         setUserName(profile.username);
         setUserEmail(profile.email);
+        setCanChangePassword(profile.has_password);
         setProfileError('');
       } catch (error) {
         if (!isMounted) {
@@ -72,13 +74,15 @@ export default function Profile() {
         </div>
 
         <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
-          <button
-            className="w-full px-4 py-4 flex items-center gap-3 hover:bg-[#F3F4F6] transition-colors border-b border-[#E5E7EB]"
-            onClick={() => navigate('/change-password')}
-          >
-            <Lock size={20} className="text-[#6B7280]" />
-            <span className="flex-1 text-left text-[#111827]">Change Password</span>
-          </button>
+          {canChangePassword && (
+            <button
+              className="w-full px-4 py-4 flex items-center gap-3 hover:bg-[#F3F4F6] transition-colors border-b border-[#E5E7EB]"
+              onClick={() => navigate('/change-password')}
+            >
+              <Lock size={20} className="text-[#6B7280]" />
+              <span className="flex-1 text-left text-[#111827]">Change Password</span>
+            </button>
+          )}
           <button onClick={handleLogout} className="w-full px-4 py-4 flex items-center gap-3 hover:bg-[#FEE2E2] transition-colors">
             <LogOut size={20} className="text-[#EF4444]" />
             <span className="flex-1 text-left text-[#EF4444]">Log Out</span>

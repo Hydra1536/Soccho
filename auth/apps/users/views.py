@@ -577,6 +577,7 @@ class MeView(PublicEndpointMixin, APIView):
                 "username": user.username,
                 "email": user.email,
                 "is_verified": user.is_verified,
+                "has_password": bool(user.password_hash),
             },
             status=status.HTTP_200_OK,
         )

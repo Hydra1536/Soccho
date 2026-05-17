@@ -216,6 +216,7 @@ def test_me_view_returns_authenticated_user(monkeypatch, settings):
         "username": user.username,
         "email": user.email,
         "is_verified": True,
+        "has_password": True,
     }
 
 

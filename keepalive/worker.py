@@ -1,8 +1,10 @@
 import logging
 import os
 import random
+import threading
 import time
 from typing import List
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
 
@@ -12,6 +14,40 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s keepalive %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path in {"/health", "/healthz", "/"}:
+            body = b'{"status":"ok"}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_response(404)
+        self.end_headers()
+
+    def log_message(self, _format, *_args):
+        return
+
+
+def _start_port_health_server_if_needed() -> None:
+    port_raw = os.getenv("PORT", "").strip()
+    if not port_raw:
+        return
+
+    try:
+        port = int(port_raw)
+    except ValueError:
+        logger.warning("invalid PORT value=%s, health server disabled", port_raw)
+        return
+
+    server = ThreadingHTTPServer(("0.0.0.0", port), _HealthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logger.info("health server started on port=%s", port)
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -55,6 +91,7 @@ def _probe_target(client: httpx.Client, url: str) -> None:
 
 
 def run() -> None:
+    _start_port_health_server_if_needed()
     enabled = _env_bool("KEEPALIVE_ENABLED", True)
     interval_seconds = float(os.getenv("KEEPALIVE_INTERVAL_SECONDS", "600"))
     timeout_seconds = float(os.getenv("KEEPALIVE_TIMEOUT_SECONDS", "15"))

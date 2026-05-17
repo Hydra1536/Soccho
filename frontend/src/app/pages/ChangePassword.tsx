@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
-import { requestChangePassword, verifyOTP } from '../../lib/auth';
+import { fetchCurrentUser, requestChangePassword, verifyOTP } from '../../lib/auth';
 import { getApiErrorMessage } from '../../lib/api';
 
 export default function ChangePassword() {
@@ -17,6 +17,33 @@ export default function ChangePassword() {
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [featureReady, setFeatureReady] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProfile = async () => {
+      try {
+        const profile = await fetchCurrentUser();
+        if (!isMounted) {
+          return;
+        }
+        setFeatureReady(profile.has_password);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+        setFeatureReady(false);
+        setError('Unable to verify account password settings right now.');
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const submitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +89,18 @@ export default function ChangePassword() {
 
         {error && <p className="text-sm text-[#EF4444] mb-3">{error}</p>}
 
-        {step === 'request' ? (
+        {featureReady === null ? (
+          <p className="text-sm text-[#6B7280]">Checking account settings...</p>
+        ) : !featureReady ? (
+          <div className="space-y-4">
+            <p className="text-sm text-[#6B7280]">
+              Password change is unavailable for OAuth-only accounts. Add a password from account settings first.
+            </p>
+            <Button fullWidth onClick={() => navigate('/profile')}>
+              Back to Profile
+            </Button>
+          </div>
+        ) : step === 'request' ? (
           <form onSubmit={submitRequest} className="space-y-4">
             <Input type="email" label="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <Input type="password" label="Current Password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} required />
