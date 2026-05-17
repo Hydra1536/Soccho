@@ -33,6 +33,51 @@ def _current_user_id(request) -> UUID | None:
     return None
 
 
+def _find_friendship_pair(user_a: UUID, user_b: UUID) -> Friendship | None:
+    return Friendship.objects.filter(
+        Q(requester_id=user_a, addressee_id=user_b) | Q(requester_id=user_b, addressee_id=user_a)
+    ).first()
+
+
+def _idempotent_friendship_response(friendship: Friendship, requester_id: UUID, addressee_id: UUID):
+    if friendship.status == Friendship.STATUS_ACCEPTED:
+        return Response(
+            {
+                'detail': 'You are already friends',
+                'friendship': FriendshipSerializer(friendship).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    if friendship.status == Friendship.STATUS_PENDING:
+        if friendship.requester_id == requester_id:
+            detail = 'Friend request already sent'
+        else:
+            detail = 'This user has already sent you a friend request'
+        return Response(
+            {
+                'detail': detail,
+                'friendship': FriendshipSerializer(friendship).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    if friendship.status == Friendship.STATUS_REJECTED:
+        friendship.requester_id = requester_id
+        friendship.addressee_id = addressee_id
+        friendship.status = Friendship.STATUS_PENDING
+        friendship.save(update_fields=['requester_id', 'addressee_id', 'status', 'updated_at'])
+        return Response(
+            {
+                'detail': 'Friend request sent',
+                'friendship': FriendshipSerializer(friendship).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    return Response({'detail': 'Friendship already exists'}, status=status.HTTP_409_CONFLICT)
+
+
 class SendRequestView(APIView):
     def post(self, request):
         serializer = FriendshipActionSerializer(data=request.data)
@@ -45,6 +90,10 @@ class SendRequestView(APIView):
         if requester_id == addressee_id:
             return Response({'detail': 'Cannot send friend request to yourself'}, status=status.HTTP_400_BAD_REQUEST)
 
+        existing = _find_friendship_pair(requester_id, addressee_id)
+        if existing is not None:
+            return _idempotent_friendship_response(existing, requester_id, addressee_id)
+
         try:
             friendship = Friendship.objects.create(
                 requester_id=requester_id,
@@ -52,6 +101,9 @@ class SendRequestView(APIView):
                 status=Friendship.STATUS_PENDING,
             )
         except IntegrityError:
+            existing = _find_friendship_pair(requester_id, addressee_id)
+            if existing is not None:
+                return _idempotent_friendship_response(existing, requester_id, addressee_id)
             return Response({'detail': 'Friendship already exists'}, status=status.HTTP_409_CONFLICT)
 
         return Response(FriendshipSerializer(friendship).data, status=status.HTTP_201_CREATED)

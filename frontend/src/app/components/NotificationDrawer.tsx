@@ -46,7 +46,6 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
 
   useEffect(() => {
     let cancelled = false;
-    const maxReconnectAttempts = 6;
 
     const clearReconnectTimer = () => {
       if (reconnectTimerRef.current !== null) {
@@ -59,11 +58,8 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       if (cancelled) {
         return;
       }
-      if (reconnectAttemptRef.current >= maxReconnectAttempts) {
-        return;
-      }
 
-      const delay = Math.min(2000 * (reconnectAttemptRef.current + 1), 10000);
+      const delay = Math.min(2000 * (reconnectAttemptRef.current + 1), 15000);
       reconnectAttemptRef.current += 1;
       clearReconnectTimer();
       reconnectTimerRef.current = window.setTimeout(() => {
@@ -107,10 +103,12 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       };
 
       ws.onerror = () => {
+        console.warn('Notification websocket error');
         scheduleReconnect();
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        console.warn('Notification websocket closed', { code: event.code, reason: event.reason });
         if (wsRef.current === ws) {
           wsRef.current = null;
         }
