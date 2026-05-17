@@ -49,9 +49,9 @@ function readStorageValue(keys: readonly string[]): string | null {
   return null;
 }
 
-function setTokens(access: string, refresh: string): void {
+function setTokens(access: string, refresh?: string): void {
   const normalizedAccess = normalizeStoredToken(access);
-  const normalizedRefresh = normalizeStoredToken(refresh);
+  const normalizedRefresh = normalizeStoredToken(typeof refresh === 'string' ? refresh : getRefreshToken());
   if (!normalizedAccess || !normalizedRefresh) {
     clearTokens();
     return;
@@ -155,12 +155,12 @@ export async function refreshAccessToken(): Promise<string | null> {
     const newAccess = refreshResponse.data?.access as string | undefined;
     const newRefresh = refreshResponse.data?.refresh as string | undefined;
 
-    if (!newAccess || !newRefresh) {
+    if (!newAccess) {
       flushQueue(null);
       return null;
     }
 
-    setTokens(newAccess, newRefresh);
+    setTokens(newAccess, newRefresh || refreshToken);
     flushQueue(newAccess);
     return newAccess;
   } catch {

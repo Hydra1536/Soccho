@@ -3,7 +3,7 @@ import { Observable } from '@apollo/client/core';
 import type { FetchResult, NextLink, Operation } from '@apollo/client/core';
 import { onError } from '@apollo/client/link/error';
 import type { ErrorResponse } from '@apollo/client/link/error';
-import { buildAuthorizationHeader, getAccessToken, getValidAccessToken } from '../lib/api';
+import { buildAuthorizationHeader, getValidAccessToken, redirectToLogin, refreshAccessToken } from '../lib/api';
 
 export type GatewayService = 'social' | 'transaction' | 'auth' | 'notification';
 
@@ -30,8 +30,7 @@ const authAndServiceLink = new ApolloLink((operation: Operation, forward: NextLi
       };
       const service = currentContext.service || 'social';
       const runtimeToken = await getValidAccessToken();
-      const fallbackToken = getAccessToken();
-      const authorizationValue = buildAuthorizationHeader(runtimeToken || fallbackToken);
+      const authorizationValue = buildAuthorizationHeader(runtimeToken);
       const restHeaders = { ...(currentContext.headers || {}) };
       delete restHeaders.authorization;
       delete restHeaders.Authorization;
@@ -67,6 +66,67 @@ const authAndServiceLink = new ApolloLink((operation: Operation, forward: NextLi
   });
 });
 
+function getNetworkStatusCode(networkError: unknown): number | null {
+  if (!networkError || typeof networkError !== 'object') {
+    return null;
+  }
+
+  const withStatusCode = networkError as { statusCode?: unknown; status?: unknown };
+  if (typeof withStatusCode.statusCode === 'number') {
+    return withStatusCode.statusCode;
+  }
+
+  if (typeof withStatusCode.status === 'number') {
+    return withStatusCode.status;
+  }
+
+  return null;
+}
+
+const unauthorizedRetryLink = onError((errorResponse: ErrorResponse) => {
+  const { networkError, operation, forward } = errorResponse;
+  const statusCode = getNetworkStatusCode(networkError);
+  const context = operation.getContext() as { _didAuthRetry?: boolean };
+
+  if (statusCode !== 401 || context._didAuthRetry || !forward) {
+    return undefined;
+  }
+
+  operation.setContext({
+    ...context,
+    _didAuthRetry: true,
+  });
+
+  return new Observable<FetchResult>((observer) => {
+    void (async () => {
+      const refreshedAccessToken = await refreshAccessToken();
+      if (!refreshedAccessToken) {
+        redirectToLogin();
+        observer.error(networkError);
+        return;
+      }
+
+      const existingContext = operation.getContext() as { headers?: Record<string, string> };
+      const nextHeaders = { ...(existingContext.headers || {}) };
+      const authHeader = buildAuthorizationHeader(refreshedAccessToken);
+      nextHeaders.authorization = authHeader;
+      nextHeaders.Authorization = authHeader;
+      operation.setContext({
+        ...existingContext,
+        headers: nextHeaders,
+      });
+
+      forward(operation).subscribe({
+        next: (value) => observer.next(value),
+        error: (error) => observer.error(error),
+        complete: () => observer.complete(),
+      });
+    })().catch((retryError) => {
+      observer.error(retryError);
+    });
+  });
+});
+
 const errorLink = onError((errorResponse: ErrorResponse) => {
   const { graphQLErrors, networkError, operation } = errorResponse;
   if (graphQLErrors?.length) {
@@ -90,7 +150,7 @@ const defaultOptions: DefaultOptions = {
 };
 
 export const apolloClient = new ApolloClient({
-  link: ApolloLink.from([errorLink, authAndServiceLink, httpLink]),
+  link: ApolloLink.from([unauthorizedRetryLink, errorLink, authAndServiceLink, httpLink]),
   cache: new InMemoryCache(),
   defaultOptions,
 });
