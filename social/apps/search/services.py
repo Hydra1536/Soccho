@@ -2,12 +2,13 @@ import json
 import time
 from typing import Any
 
-import grpc
 import redis
-from django.conf import settings
 from django.contrib.postgres.search import TrigramSimilarity
+from django.db.models import Sum
 
-from grpc_infra.clients import get_auth_client, get_transaction_client
+from django.conf import settings
+
+from apps.search.models import SearchableTransaction, SearchableUser
 
 
 def _redis_client() -> redis.Redis:
@@ -48,16 +49,15 @@ async def get_loyalty_score(user_id: str) -> float:
     if cached is not None:
         return float(cached)
 
-    tx_client = get_transaction_client()
-    try:
-        response = await tx_client.GetBalanceForLoyalty(user_id)
-        total_given = float(getattr(response, 'total_given', 0.0))
-        total_lent = float(getattr(response, 'total_lent', 0.0))
-        total_transactions = float(getattr(response, 'total_transactions', 0.0))
-    except (grpc.RpcError, grpc.aio.AioRpcError, AttributeError):
-        total_given = 0.0
-        total_lent = 0.0
-        total_transactions = 0.0
+    confirmed = SearchableTransaction.objects.filter(
+        status=SearchableTransaction.STATUS_CONFIRMED,
+        is_deleted=False,
+    )
+    total_given = float((confirmed.filter(lender_id=user_id).aggregate(v=Sum('amount'))['v'] or 0.0))
+    total_lent = float((confirmed.filter(borrower_id=user_id).aggregate(v=Sum('amount'))['v'] or 0.0))
+    total_transactions = float(
+        confirmed.filter(lender_id=user_id).count() + confirmed.filter(borrower_id=user_id).count()
+    )
 
     if total_transactions <= 0:
         score = 0.0
@@ -69,12 +69,8 @@ async def get_loyalty_score(user_id: str) -> float:
 
 
 async def resolve_username(user_id: str) -> str:
-    auth_client = get_auth_client()
-    try:
-        info = await auth_client.GetUserInfo(str(user_id))
-        return getattr(info, 'username', '')
-    except (grpc.RpcError, grpc.aio.AioRpcError):
-        return ''
+    user = SearchableUser.objects.filter(id=user_id).first()
+    return user.username if user is not None else ''
 
 
 def build_user_row(user_id: str, username: str, loyalty_score: float | None) -> dict[str, Any]:

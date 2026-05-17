@@ -1,46 +1,31 @@
-# Soccho Render Microservice Deployment Guide
+# Soccho Render Deployment Guide (HTTP-Only)
 
-This guide is for deploying Soccho on Render as separate services.
+This repository is now configured for HTTP-only service communication.
 
 ## 1. Important repo rule
 
-Keep each Render service rooted at the **repository root**.
+Keep each Render service rooted at the repository root.
 
-Do **not** set a Render `rootDir` like `auth/` or `gateway/` for these services, because this repo uses shared files and folders outside each service directory, especially:
-
-- `shared/proto/`
-- `compile_protos.sh`
-- repo-level env examples and deployment docs
-
-If you set a subdirectory root, Render will not make files outside that root available to the service build/runtime.
+Do not set a Render `rootDir` like `auth/` or `gateway/` because this monorepo uses shared files outside service folders.
 
 ## 2. Recommended Render service layout
 
-Create these services:
-
 ### Public services
 
-- `soccho-frontend` : Static Site
-- `soccho-gateway` : Web Service
-- `soccho-notification` : Web Service
-- `soccho-admin` : Web Service
+- `soccho-frontend` (Static Site)
+- `soccho-gateway` (Web Service)
+- `soccho-notification` (Web Service)
+- `soccho-admin` (Web Service)
 
-### Private internal HTTP services
+### Internal HTTP services
 
-- `soccho-auth-http` : Private Service
-- `soccho-social-http` : Private Service
-- `soccho-transaction-http` : Private Service
-
-### Private internal gRPC services
-
-- `soccho-auth-grpc` : Private Service
-- `soccho-social-grpc` : Private Service
-- `soccho-transaction-grpc` : Private Service
-- `soccho-notification-grpc` : Private Service
+- `soccho-auth-http` (Web Service)
+- `soccho-social-http` (Web Service)
+- `soccho-transaction-http` (Web Service)
 
 ### Background worker
 
-- `soccho-transaction-worker` : Background Worker
+- `soccho-transaction-worker` (Background Worker)
 
 ### Managed data services
 
@@ -49,9 +34,9 @@ Create these services:
 
 ## 3. Exact commands per service
 
-All commands below assume the Render service root is the repo root.
+All commands below assume the service root is the repository root.
 
-### `soccho-frontend` (Static Site)
+### soccho-frontend
 
 - Build Command:
 ```bash
@@ -62,22 +47,12 @@ cd frontend && npm install && npm run build
 frontend/dist
 ```
 
-- Redirects/Rewrites (required for SPA routes like `/home`):
-  - Open Render Dashboard -> `soccho-frontend` -> `Redirects/Rewrites`
-  - Add rule:
-    - Source: `/*`
-    - Destination: `/index.html`
-    - Action: `Rewrite`
-  - Save and trigger a deploy.
-  - The frontend also ships `frontend/public/_redirects`, which Vite copies into `frontend/dist` during build.
+Add SPA rewrite:
+- Source: `/*`
+- Destination: `/index.html`
+- Action: `Rewrite`
 
-- Declarative Blueprint option:
-  - This repo now includes [render.frontend.yaml](d:/Soccho/render.frontend.yaml) with the same SPA rewrite declared in code.
-  - In Render, create or update a Blueprint and set the Blueprint path to `render.frontend.yaml` if you want Render to manage this rewrite from the repo instead of only through the dashboard.
-
-Without this rewrite, direct navigation/refresh on client-side routes returns `404 Not Found` because Render tries to find a physical file at that path.
-
-### `soccho-gateway` (Public Web Service)
+### soccho-gateway
 
 - Build Command:
 ```bash
@@ -88,7 +63,7 @@ pip install -r gateway/requirements.txt
 cd gateway && uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
-### `soccho-notification` (Public Web Service)
+### soccho-notification
 
 - Build Command:
 ```bash
@@ -103,7 +78,7 @@ cd notification && python manage.py migrate
 cd notification && daphne -b 0.0.0.0 -p $PORT notification_service.asgi:application
 ```
 
-### `soccho-admin` (Public Web Service)
+### soccho-admin
 
 - Build Command:
 ```bash
@@ -118,7 +93,7 @@ cd admin && python manage.py migrate
 cd admin && gunicorn admin_service.wsgi --bind 0.0.0.0:$PORT
 ```
 
-### `soccho-auth-http` (Private Service)
+### soccho-auth-http
 
 - Build Command:
 ```bash
@@ -133,7 +108,7 @@ cd auth && python manage.py migrate
 cd auth && gunicorn auth_service.wsgi --bind 0.0.0.0:$PORT
 ```
 
-### `soccho-social-http` (Private Service)
+### soccho-social-http
 
 - Build Command:
 ```bash
@@ -148,7 +123,7 @@ cd social && python manage.py migrate
 cd social && gunicorn social_service.wsgi --bind 0.0.0.0:$PORT
 ```
 
-### `soccho-transaction-http` (Private Service)
+### soccho-transaction-http
 
 - Build Command:
 ```bash
@@ -163,51 +138,7 @@ cd transaction && python manage.py migrate
 cd transaction && gunicorn transaction_service.wsgi --bind 0.0.0.0:$PORT
 ```
 
-### `soccho-auth-grpc` (Private Service)
-
-- Build Command:
-```bash
-pip install -r auth/requirements.txt
-```
-- Start Command:
-```bash
-cd auth && python manage.py run_grpc
-```
-
-### `soccho-social-grpc` (Private Service)
-
-- Build Command:
-```bash
-pip install -r social/requirements.txt
-```
-- Start Command:
-```bash
-cd social && python manage.py run_grpc
-```
-
-### `soccho-transaction-grpc` (Private Service)
-
-- Build Command:
-```bash
-pip install -r transaction/requirements.txt
-```
-- Start Command:
-```bash
-cd transaction && python manage.py run_grpc
-```
-
-### `soccho-notification-grpc` (Private Service)
-
-- Build Command:
-```bash
-pip install -r notification/requirements.txt
-```
-- Start Command:
-```bash
-cd notification && python manage.py run_grpc
-```
-
-### `soccho-transaction-worker` (Background Worker)
+### soccho-transaction-worker
 
 - Build Command:
 ```bash
@@ -218,122 +149,23 @@ pip install -r transaction/requirements.txt
 cd transaction && celery -A transaction_service worker -B
 ```
 
-## 4. Public URLs you will use
+## 4. Required environment variables
 
-If you create the public services with these exact names, your public URLs will be:
+Set these service URLs in `soccho-gateway`:
 
-- Frontend:
-```text
-https://soccho-frontend.onrender.com
-```
-- Gateway:
-```text
-https://soccho-gateway.onrender.com
-```
-- Notification WebSocket / public notification app:
-```text
-https://soccho-notification.onrender.com
-```
-- Admin:
-```text
-https://soccho-admin.onrender.com
-```
+- `AUTH_HTTP_BASE_URL`
+- `SOCIAL_HTTP_BASE_URL`
+- `TRANSACTION_HTTP_BASE_URL`
+- `NOTIFICATION_HTTP_BASE_URL`
 
-Admin panel final URL:
+Set these shared values across backend services:
 
-```text
-https://soccho-admin.onrender.com/<ADMIN_URL_PATH>
-```
-
-Example:
-
-```text
-https://soccho-admin.onrender.com/119115131318115/
-```
-
-## 5. Internal URLs and hostnames you will use
-
-For private services, Render assigns an internal hostname. Copy each one from:
-
-- Render Dashboard
-- Service
-- `Connect`
-- `Internal`
-
-Use those values in env vars.
-
-### Gateway env mapping
-
-Set these on `soccho-gateway`:
-
-- `AUTH_HTTP_BASE_URL` = internal URL of `soccho-auth-http`
-- `SOCIAL_HTTP_BASE_URL` = internal URL of `soccho-social-http`
-- `TRANSACTION_HTTP_BASE_URL` = internal URL of `soccho-transaction-http`
-- `NOTIFICATION_HTTP_BASE_URL` = internal URL of `soccho-notification`
-
-- `AUTH_GRPC_HOST` = internal hostname of `soccho-auth-grpc` without scheme
-- `AUTH_GRPC_PORT` = `8001`
-- `SOCIAL_GRPC_HOST` = internal hostname of `soccho-social-grpc`
-- `SOCIAL_GRPC_PORT` = `8002`
-- `TRANSACTION_GRPC_HOST` = internal hostname of `soccho-transaction-grpc`
-- `TRANSACTION_GRPC_PORT` = `8003`
-- `NOTIFICATION_GRPC_HOST` = internal hostname of `soccho-notification-grpc`
-- `NOTIFICATION_GRPC_PORT` = `8004`
-
-### Auth service env mapping
-
-Set these on `soccho-auth-http`:
-
-- `GOOGLE_CLIENT_ID` = your Google OAuth client id
-- `GOOGLE_CLIENT_SECRET` = your Google OAuth client secret
-- `GOOGLE_OAUTH_REDIRECT_URI` = `https://soccho-gateway.onrender.com/oauth/google/callback/`
-
-### Social service env mapping
-
-Set these on `soccho-social-http` and `soccho-social-grpc`:
-
-- `AUTH_GRPC_HOST` = internal hostname of `soccho-auth-grpc`
-- `AUTH_GRPC_PORT` = `8001`
-- `TRANSACTION_GRPC_HOST` = internal hostname of `soccho-transaction-grpc`
-- `TRANSACTION_GRPC_PORT` = `8003`
-
-### Transaction service env mapping
-
-Set these on `soccho-transaction-http`, `soccho-transaction-grpc`, and `soccho-transaction-worker`:
-
-- `SOCIAL_GRPC_HOST` = internal hostname of `soccho-social-grpc`
-- `SOCIAL_GRPC_PORT` = `8002`
-
-### Notification service env mapping
-
-Set these on `soccho-notification` and `soccho-notification-grpc`:
-
-- `TRANSACTION_HTTP_BASE_URL` = internal URL of `soccho-transaction-http`
-- `AUTH_SECRET_KEY` = the exact same value used by `soccho-auth-http`
-
-### Frontend env mapping
-
-Set these on `soccho-frontend`:
-
-- `VITE_API_URL` = public URL of `soccho-gateway`
-- `VITE_GOOGLE_CLIENT_ID` = your Google OAuth client id
-- `VITE_NOTIFICATION_WS_URL` = public URL of `soccho-notification`
-
-## 6. Shared core env vars
-
-Set these on every backend service that needs them:
-
-- `DEBUG=false`
-- `DATABASE_URL=<Render Postgres internal connection string>`
-- `REDIS_CACHE_URL=<Render Key Value internal URL>/0`
-- `CELERY_BROKER_URL=<Render Key Value internal URL>/1`
-- `CELERY_RESULT_BACKEND=<Render Key Value internal URL>/1`
-- `CHANNEL_LAYERS_REDIS_URL=<Render Key Value internal URL>/2`
-- `ALLOWED_ORIGINS=https://soccho-frontend.onrender.com,https://soccho-gateway.onrender.com`
-- `AXES_ENABLED=false`
-
-And the service secrets:
-
+- `DATABASE_URL`
+- `REDIS_CACHE_URL`
+- `CELERY_BROKER_URL`
+- `CELERY_RESULT_BACKEND`
+- `CHANNEL_LAYERS_REDIS_URL`
+- `ALLOWED_ORIGINS`
 - `AUTH_SECRET_KEY`
 - `SOCIAL_SECRET_KEY`
 - `TRANSACTION_SECRET_KEY`
@@ -341,45 +173,11 @@ And the service secrets:
 - `ADMIN_SECRET_KEY`
 - `GATEWAY_SECRET_KEY`
 - `AES_SECRET_KEY`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `ADMIN_URL_PATH`
 
-## 7. Current deployment verdict
+Important: `AUTH_SECRET_KEY` must be identical in `soccho-auth-http`, `soccho-gateway`, and `soccho-notification`.
 
-After the wiring fixes in this repo:
+## 5. Post-deploy verification
 
-- HTTP proxy env wiring is now configurable for Render.
-- `DATABASE_URL` fallback is now supported in the Django services.
-- frontend auth/session wiring is improved.
-- notification resolve flow no longer depends on a missing transaction gRPC method.
-
-But this project is **not** a simple 4-service Render deploy.
-
-It is only realistically deployable on Render if you use the split layout above, because:
-
-- the gateway needs private HTTP services
-- cross-service communication still depends on separate gRPC listeners
-- notifications use a public WebSocket endpoint
-- transaction reminders need a Celery worker
-
-## 8. Recommended deployment order
-
-1. Create Render Postgres
-2. Create Render Key Value
-3. Deploy private gRPC services
-4. Deploy private HTTP services
-5. Deploy transaction worker
-6. Deploy public notification service
-7. Deploy public gateway
-8. Deploy public admin
-9. Deploy frontend static site
-
-## 9. Quick sanity checklist
-
-- Gateway `/health` returns `200`
-- Frontend can log in through gateway
-- `VITE_NOTIFICATION_WS_URL` points to the public notification service
-- Gateway can reach all private HTTP and gRPC services through internal networking
-- Notification service can call transaction resolve endpoint through `TRANSACTION_HTTP_BASE_URL`
-- Celery worker is running and connected to Redis
+- `https://soccho-gateway.onrender.com/healthz` returns 200.
+- Login succeeds and frontend receives access/refresh tokens.
+- Home page loads summary/friends without 401 loops.

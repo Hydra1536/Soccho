@@ -6,5 +6,5 @@ def test_gateway_imports():
 def test_gateway_pydantic_settings_consistency():
     from app.config import Settings
     s = Settings()
-    assert isinstance(s.auth_grpc_port, int)
+    assert isinstance(s.auth_http_base_url, str)
     assert bool(s.gateway_secret_key)

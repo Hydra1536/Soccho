@@ -1,5 +1,5 @@
-const CACHE_NAME = 'soccho-shell-v3';
-const API_CACHE = 'soccho-api-v3';
+const CACHE_NAME = 'soccho-shell-v4';
+const API_CACHE = 'soccho-api-v4';
 const TTL_MS = 5 * 60 * 1000;
 const DB_NAME = 'soccho-offline';
 const STORE = 'tx-queue';

@@ -1,3 +1,2 @@
 web: gunicorn transaction_service.wsgi --bind 0.0.0.0:$PORT
-grpc: python manage.py run_grpc
 worker: celery -A transaction_service worker -B

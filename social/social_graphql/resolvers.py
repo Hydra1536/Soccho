@@ -1,27 +1,11 @@
 from asgiref.sync import async_to_sync
 from django.db.models import Q
-from promise import Promise
-from promise.dataloader import DataLoader
 
 import graphene
 from apps.friendships.models import Friendship
+from apps.search.models import SearchableUser
 from apps.search.services import get_loyalty_score
-from grpc_infra.clients import get_auth_client
 from .types import FriendNode
-
-
-class UsernameLoader(DataLoader):
-    def batch_load_fn(self, keys):
-        auth_client = get_auth_client()
-
-        async def _load():
-            values = []
-            for user_id in keys:
-                info = await auth_client.GetUserInfo(str(user_id))
-                values.append(getattr(info, 'username', ''))
-            return values
-
-        return Promise.resolve(async_to_sync(_load)())
 
 
 class FriendListQuery(graphene.ObjectType):
@@ -42,13 +26,20 @@ class FriendListQuery(graphene.ObjectType):
             .order_by('-created_at')
         )
 
-        loader = UsernameLoader()
+        friend_ids = {
+            str(edge.addressee_id if str(edge.requester_id) == user_id else edge.requester_id)
+            for edge in queryset
+        }
+        usernames = {
+            str(user_id_value): username
+            for user_id_value, username in SearchableUser.objects.filter(id__in=friend_ids).values_list('id', 'username')
+        }
         loyalty_score = async_to_sync(get_loyalty_score)(user_id)
 
         rows = []
         for edge in queryset:
             friend_id = edge.addressee_id if str(edge.requester_id) == user_id else edge.requester_id
-            username = loader.load(str(friend_id)).get()
+            username = usernames.get(str(friend_id), '')
             rows.append(
                 FriendNode(
                     friendship_id=str(edge.id),

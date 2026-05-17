@@ -6,7 +6,6 @@ celery[redis]
 django-cryptography
 redis
 pybreaker
-grpcio
 python-dotenv
 gunicorn
 psycopg2-binary

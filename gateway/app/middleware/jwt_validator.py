@@ -1,16 +1,12 @@
-import time
-from typing import Any, Awaitable, Callable
+from typing import Awaitable, Callable
 import logging
 
-import grpc
 import jwt
-import pybreaker
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import get_settings
-from app.grpc_client.auth_client import auth_client
 from app.middleware.auth_exemptions import should_skip_auth
 
 logger = logging.getLogger(__name__)
@@ -19,12 +15,9 @@ logger = logging.getLogger(__name__)
 class JWTValidationMiddleware(BaseHTTPMiddleware):
     def __init__(self, app):
         super().__init__(app)
-        self.breaker = pybreaker.CircuitBreaker(fail_max=5, reset_timeout=30)
-        self.token_cache: dict[str, tuple[str, float]] = {}
-        self.cache_ttl_seconds = 30
         self.settings = get_settings()
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Any]]):
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[object]]):
         if should_skip_auth(request.method, request.url.path):
             return await call_next(request)
 
@@ -33,47 +26,13 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
             logger.info("Auth rejected: missing token path=%s method=%s", request.url.path, request.method)
             return JSONResponse(status_code=401, content={'detail': 'Invalid credentials'})
 
+        user_id = self._validate_locally(token)
+        if not user_id:
+            logger.info("Auth rejected: local JWT verify failed path=%s", request.url.path)
+            return JSONResponse(status_code=401, content={'detail': 'Invalid credentials'})
+
+        request.state.user_id = user_id
         try:
-            response = await self.breaker.call_async(self._validate_with_auth_service, token)
-            if not getattr(response, 'valid', False):
-                user_id = self._validate_locally(token)
-                if not user_id:
-                    logger.info("Auth rejected: token invalid via gRPC+local path=%s", request.url.path)
-                    return JSONResponse(status_code=401, content={'detail': 'Invalid credentials'})
-                request.state.user_id = user_id
-                self.token_cache[token] = (user_id, time.time())
-                logger.warning("Auth fallback: accepted token via local JWT verify after gRPC invalid path=%s", request.url.path)
-                return await call_next(request)
-
-            user_id = str(getattr(response, 'user_id', ''))
-            if not user_id:
-                logger.info("Auth rejected: empty user_id from auth service path=%s", request.url.path)
-                return JSONResponse(status_code=401, content={'detail': 'Invalid credentials'})
-
-            request.state.user_id = user_id
-            self.token_cache[token] = (user_id, time.time())
-            return await call_next(request)
-        except (pybreaker.CircuitBreakerError, grpc.aio.AioRpcError, grpc.RpcError, TimeoutError):
-            user_id = self._validate_locally(token)
-            if user_id:
-                request.state.user_id = user_id
-                self.token_cache[token] = (user_id, time.time())
-                logger.warning("Auth fallback: accepted token via local JWT verify after gRPC error path=%s", request.url.path)
-                return await call_next(request)
-
-            cached = self.token_cache.get(token)
-            if cached is None:
-                logger.info("Auth rejected: no cache and local verify failed after gRPC error path=%s", request.url.path)
-                return JSONResponse(status_code=401, content={'detail': 'Invalid credentials'})
-
-            user_id, cached_at = cached
-            if time.time() - cached_at > self.cache_ttl_seconds:
-                self.token_cache.pop(token, None)
-                logger.info("Auth rejected: cached token expired after gRPC error path=%s", request.url.path)
-                return JSONResponse(status_code=401, content={'detail': 'Invalid credentials'})
-
-            request.state.user_id = user_id
-            logger.warning("Auth fallback: accepted cached token after gRPC error path=%s", request.url.path)
             return await call_next(request)
         except Exception:
             logger.exception("Auth middleware exception path=%s", request.url.path)
@@ -115,6 +74,3 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
 
         user_id = str(payload.get('sub', '')).strip()
         return user_id
-
-    async def _validate_with_auth_service(self, token: str):
-        return await auth_client.validate_token(token)
