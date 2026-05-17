@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+import jwt
 from rest_framework.test import APIRequestFactory
 
 pytest.importorskip("axes")
@@ -180,6 +181,41 @@ def test_register_view_returns_service_unavailable_on_storage_error(monkeypatch)
 
     assert response.status_code == 503
     assert response.data == {"detail": "Auth service is temporarily unavailable"}
+
+
+def test_me_view_returns_authenticated_user(monkeypatch, settings):
+    user = SimpleNamespace(
+        id="1bc18dc6-e30f-4860-818d-0a5f6fb2b200",
+        username="rio",
+        email="rio@example.com",
+        is_verified=True,
+    )
+    token = jwt.encode(
+        {
+            "sub": user.id,
+            "username": user.username,
+            "type": "access",
+            "exp": 4102444800,
+        },
+        settings.SECRET_KEY,
+        algorithm="HS256",
+    )
+    monkeypatch.setattr(user_views, "_get_user_by_id", lambda *_args, **_kwargs: user)
+
+    request = APIRequestFactory().get(
+        "/api/auth/me/",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    response = user_views.MeView.as_view()(request)
+
+    assert response.status_code == 200
+    assert response.data == {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "is_verified": True,
+    }
 
 
 def test_send_otp_email_posts_emailjs_payload(monkeypatch):

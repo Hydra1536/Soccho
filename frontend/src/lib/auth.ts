@@ -1,10 +1,17 @@
-import api, { API_URL, dropTokens, getRefreshToken, persistTokens } from './api';
+import api, { API_URL, EMAIL_KEY, USERNAME_KEY, dropTokens, getRefreshToken, persistTokens } from './api';
 
 export type OTPContext = 'register' | 'forgot' | 'change_pw';
 
 type TokenPair = {
   access: string;
   refresh: string;
+};
+
+export type CurrentUser = {
+  id: string;
+  username: string;
+  email: string;
+  is_verified: boolean;
 };
 
 export async function login(email: string, password: string): Promise<void> {
@@ -63,4 +70,11 @@ export async function googleLogin(): Promise<void> {
   });
   window.location.assign(`${API_URL}/oauth/google/start/?${params.toString()}`);
   return new Promise(() => undefined);
+}
+
+export async function fetchCurrentUser(): Promise<CurrentUser> {
+  const { data } = await api.get<CurrentUser>('/api/auth/me/');
+  localStorage.setItem(USERNAME_KEY, data.username);
+  localStorage.setItem(EMAIL_KEY, data.email);
+  return data;
 }

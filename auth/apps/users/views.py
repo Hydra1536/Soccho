@@ -116,6 +116,59 @@ def _get_user_by_username(username: str) -> User | None:
         raise AuthStorageError("User username lookup failed") from exc
 
 
+def _get_user_by_id(user_id: str) -> User | None:
+    normalized_user_id = (user_id or "").strip()
+    if not normalized_user_id:
+        return None
+    try:
+        return User.objects.filter(id=normalized_user_id).first()
+    except DatabaseError as exc:
+        raise AuthStorageError("User id lookup failed") from exc
+
+
+def _extract_bearer_token(request) -> str:
+    auth_header = request.headers.get("Authorization", "").strip()
+    if auth_header:
+        parts = auth_header.split(" ", 1)
+        if len(parts) == 2 and parts[0].lower() in {"bearer", "jwt", "token"}:
+            return parts[1].strip()
+        return ""
+
+    cookie_token = (request.COOKIES.get("access_token") or "").strip()
+    if cookie_token:
+        return cookie_token
+
+    query_token = (request.query_params.get("token") or "").strip()
+    if query_token:
+        return query_token
+
+    return ""
+
+
+def _get_authenticated_user(request) -> User | None:
+    token = _extract_bearer_token(request)
+    if not token:
+        return None
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=["HS256"],
+            options={"require": ["exp", "sub"]},
+        )
+    except jwt.PyJWTError:
+        return None
+
+    if payload.get("type") != "access":
+        return None
+
+    try:
+        return _get_user_by_id(str(payload.get("sub", "")).strip())
+    except AuthStorageError:
+        raise
+
+
 def _allowed_frontend_origins() -> list[str]:
     return [origin.rstrip("/") for origin in getattr(settings, "ALLOWED_ORIGINS", []) if origin]
 
@@ -501,6 +554,27 @@ class LogoutView(PublicEndpointMixin, APIView):
         if updated == 0:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MeView(APIView):
+    def get(self, request):
+        try:
+            user = _get_authenticated_user(request)
+        except AuthStorageError:
+            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        if user is None:
+            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+
+        return Response(
+            {
+                "id": str(user.id),
+                "username": user.username,
+                "email": user.email,
+                "is_verified": user.is_verified,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class GoogleOAuthView(PublicEndpointMixin, APIView):

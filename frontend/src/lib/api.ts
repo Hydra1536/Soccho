@@ -6,6 +6,8 @@ export const AUTH_SCHEME = (import.meta.env.VITE_AUTH_SCHEME || 'Bearer').trim()
 export const ACCESS_TOKEN_KEY = 'access_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';
 export const USER_ID_KEY = 'user_id';
+export const USERNAME_KEY = 'username';
+export const EMAIL_KEY = 'email';
 const ACCESS_TOKEN_FALLBACK_KEYS = ['accessToken', 'token', 'jwt'] as const;
 const REFRESH_TOKEN_FALLBACK_KEYS = ['refreshToken'] as const;
 
@@ -59,9 +61,14 @@ function setTokens(access: string, refresh?: string): void {
 
   localStorage.setItem(ACCESS_TOKEN_KEY, normalizedAccess);
   localStorage.setItem(REFRESH_TOKEN_KEY, normalizedRefresh);
+  localStorage.removeItem(EMAIL_KEY);
   const userId = extractUserId(normalizedAccess);
   if (userId) {
     localStorage.setItem(USER_ID_KEY, userId);
+  }
+  const username = extractUsername(normalizedAccess);
+  if (username) {
+    localStorage.setItem(USERNAME_KEY, username);
   }
 }
 
@@ -71,12 +78,14 @@ function clearTokens(): void {
     storage.removeItem(ACCESS_TOKEN_KEY);
     storage.removeItem(REFRESH_TOKEN_KEY);
     storage.removeItem(USER_ID_KEY);
+    storage.removeItem(USERNAME_KEY);
+    storage.removeItem(EMAIL_KEY);
     ACCESS_TOKEN_FALLBACK_KEYS.forEach((key) => storage.removeItem(key));
     REFRESH_TOKEN_FALLBACK_KEYS.forEach((key) => storage.removeItem(key));
   }
 }
 
-function decodeTokenPayload(token: string): { sub?: string; exp?: number } | null {
+function decodeTokenPayload(token: string): { sub?: string; exp?: number; username?: string } | null {
   try {
     const [, payload] = token.split('.');
     if (!payload) {
@@ -85,7 +94,7 @@ function decodeTokenPayload(token: string): { sub?: string; exp?: number } | nul
 
     const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
     const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-    return JSON.parse(atob(padded)) as { sub?: string; exp?: number };
+    return JSON.parse(atob(padded)) as { sub?: string; exp?: number; username?: string };
   } catch {
     return null;
   }
@@ -93,6 +102,10 @@ function decodeTokenPayload(token: string): { sub?: string; exp?: number } | nul
 
 function extractUserId(token: string): string | null {
   return decodeTokenPayload(token)?.sub || null;
+}
+
+function extractUsername(token: string): string | null {
+  return decodeTokenPayload(token)?.username || null;
 }
 
 function flushQueue(token: string | null): void {

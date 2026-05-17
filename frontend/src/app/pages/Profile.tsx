@@ -1,13 +1,45 @@
+import { useEffect, useState } from 'react';
 import { ArrowLeft, LogOut, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { BottomNav } from '../components/BottomNav';
-import { logout } from '../../lib/auth';
+import { fetchCurrentUser, logout } from '../../lib/auth';
+import { EMAIL_KEY, USERNAME_KEY, getApiErrorMessage } from '../../lib/api';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const userName = localStorage.getItem('username') || 'Your Name';
-  const userEmail = localStorage.getItem('email') || 'you@example.com';
+  const [userName, setUserName] = useState(localStorage.getItem(USERNAME_KEY) || '');
+  const [userEmail, setUserEmail] = useState(localStorage.getItem(EMAIL_KEY) || '');
+  const [profileError, setProfileError] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProfile = async () => {
+      try {
+        const profile = await fetchCurrentUser();
+        if (!isMounted) {
+          return;
+        }
+
+        setUserName(profile.username);
+        setUserEmail(profile.email);
+        setProfileError('');
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setProfileError(getApiErrorMessage(error, 'Unable to load profile details right now.'));
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -30,12 +62,13 @@ export default function Profile() {
       <div className="max-w-md mx-auto px-4 py-6 space-y-6">
         <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
           <div className="flex justify-center mb-4">
-            <Avatar name={userName} size="large" />
+            <Avatar name={userName || 'User'} size="large" />
           </div>
           <h2 className="font-bold text-xl mb-1" style={{ fontFamily: 'var(--font-display)' }}>
-            {userName}
+            {userName || 'Loading profile...'}
           </h2>
-          <p className="text-sm text-[#6B7280]">{userEmail}</p>
+          <p className="text-sm text-[#6B7280]">{userEmail || 'Fetching your account details...'}</p>
+          {profileError && <p className="mt-3 text-sm text-[#EF4444]">{profileError}</p>}
         </div>
 
         <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
