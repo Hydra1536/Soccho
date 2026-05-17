@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 import jwt
+from django.contrib.auth.hashers import check_password, make_password
 from rest_framework.test import APIRequestFactory
 
 pytest.importorskip("axes")
@@ -216,6 +217,57 @@ def test_me_view_returns_authenticated_user(monkeypatch, settings):
         "email": user.email,
         "is_verified": True,
     }
+
+
+def test_change_password_request_sends_otp_instead_of_changing_password(monkeypatch):
+    class DummyUser:
+        def __init__(self):
+            self.id = "user-1"
+            self.email = "user@example.com"
+            self.password_hash = make_password("oldpass123")
+            self.saved_fields = None
+
+        def save(self, update_fields=None):
+            self.saved_fields = update_fields
+
+    class DummyOtpQuerySet:
+        def __init__(self):
+            self.updated_kwargs = None
+
+        def update(self, **kwargs):
+            self.updated_kwargs = kwargs
+            return 1
+
+    user = DummyUser()
+    pending_otps = DummyOtpQuerySet()
+    cache_state = {}
+
+    monkeypatch.setattr(user_views, "_get_user_by_email", lambda *_args, **_kwargs: user)
+    monkeypatch.setattr(user_views.OTPCode.objects, "filter", lambda **_kwargs: pending_otps)
+    monkeypatch.setattr(user_views.cache, "set", lambda key, value, timeout=0: cache_state.update({key: value}))
+    monkeypatch.setattr(user_views.cache, "delete", lambda key: cache_state.pop(key, None))
+    monkeypatch.setattr(user_views, "generate_otp", lambda *_args, **_kwargs: "654321")
+    monkeypatch.setattr(user_views, "_send_otp_email", lambda *_args, **_kwargs: None)
+
+    request = APIRequestFactory().post(
+        "/api/auth/change-password/request/",
+        {
+            "email": "user@example.com",
+            "old_password": "oldpass123",
+            "new_password": "newpass123",
+            "confirm_password": "newpass123",
+        },
+        format="json",
+    )
+
+    response = user_views.ChangePasswordView.as_view()(request)
+
+    assert response.status_code == 200
+    assert response.data == {"message": "OTP sent successfully"}
+    assert user.saved_fields is None
+    assert pending_otps.updated_kwargs == {"is_used": True}
+    cached_hash = cache_state[user_views._change_password_cache_key(user.id)]
+    assert check_password("newpass123", cached_hash) is True
 
 
 def test_send_otp_email_posts_emailjs_payload(monkeypatch):

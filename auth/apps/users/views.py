@@ -11,6 +11,7 @@ import requests
 from axes.decorators import axes_dispatch
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
+from django.core.cache import cache
 from django.core import signing
 from django.db import DatabaseError, IntegrityError, transaction
 from django.http import HttpResponseRedirect
@@ -182,6 +183,10 @@ def _is_allowed_frontend_origin(origin: str) -> bool:
 def _default_frontend_origin() -> str:
     allowed = _allowed_frontend_origins()
     return allowed[0] if allowed else ""
+
+
+def _change_password_cache_key(user_id: str) -> str:
+    return f"change-password:{user_id}"
 
 
 def _build_public_url(request, path: str) -> str:
@@ -706,6 +711,25 @@ class ChangePasswordView(PublicEndpointMixin, APIView):
         if not user.password_hash or not check_password(serializer.validated_data["old_password"], user.password_hash):
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
-        user.password_hash = make_password(serializer.validated_data["new_password"])
-        user.save(update_fields=["password_hash"])
-        return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
+        OTPCode.objects.filter(
+            user=user,
+            context=OTPCode.CONTEXT_CHANGE_PW,
+            is_used=False,
+        ).update(is_used=True)
+        cache.set(
+            _change_password_cache_key(str(user.id)),
+            make_password(serializer.validated_data["new_password"]),
+            timeout=600,
+        )
+
+        try:
+            otp_code = generate_otp(user, OTPCode.CONTEXT_CHANGE_PW)
+            _send_otp_email(user.email, otp_code, OTPCode.CONTEXT_CHANGE_PW)
+        except ValueError:
+            cache.delete(_change_password_cache_key(str(user.id)))
+            return Response(OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception:
+            cache.delete(_change_password_cache_key(str(user.id)))
+            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+
+        return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)

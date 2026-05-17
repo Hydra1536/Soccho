@@ -1,4 +1,5 @@
 from django.utils import timezone as dj_timezone
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -8,7 +9,13 @@ from rest_framework.views import APIView
 from apps.otp.models import OTPCode
 from apps.otp.services import hash_otp
 from apps.users.models import User
-from apps.users.views import AUTH_SERVICE_UNAVAILABLE, AuthStorageError, _get_user_by_email, _issue_tokens
+from apps.users.views import (
+    AUTH_SERVICE_UNAVAILABLE,
+    AuthStorageError,
+    _change_password_cache_key,
+    _get_user_by_email,
+    _issue_tokens,
+)
 
 INVALID_CREDENTIALS = {"detail": "Invalid credentials"}
 
@@ -59,6 +66,13 @@ class VerifyOTPView(APIView):
         if context == OTPCode.CONTEXT_REGISTER and not user.is_verified:
             user.is_verified = True
             user.save(update_fields=["is_verified"])
+        elif context == OTPCode.CONTEXT_CHANGE_PW:
+            pending_password_hash = cache.get(_change_password_cache_key(str(user.id)))
+            if not pending_password_hash:
+                return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+            user.password_hash = pending_password_hash
+            user.save(update_fields=["password_hash"])
+            cache.delete(_change_password_cache_key(str(user.id)))
 
         access, refresh = _issue_tokens(user)
         return Response({"access": access, "refresh": refresh}, status=status.HTTP_200_OK)
