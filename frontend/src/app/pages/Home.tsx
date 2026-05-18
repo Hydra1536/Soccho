@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, ResponsiveContainer } from 'recharts';
 import { useApolloClient, useQuery } from '@apollo/client';
 import { GET_DASHBOARD_SUMMARY, GET_FRIEND_LEDGER, GET_FRIENDS } from '../../graphql/queries';
+import { toDeterministicFriendshipUuid } from '../../lib/friendshipKey';
 import { Avatar } from '../components/Avatar';
 import { BalanceChip } from '../components/BalanceChip';
 import { EqualPayDrawer } from '../components/EqualPayDrawer';
@@ -95,7 +96,7 @@ export default function Home() {
           try {
             const { data } = await apolloClient.query({
               query: GET_FRIEND_LEDGER,
-              variables: { friendshipId: friend.friendshipId },
+              variables: { friendshipId: toDeterministicFriendshipUuid(String(friend.friendshipId || '')) },
               context: { service: 'transaction' },
               fetchPolicy: 'network-only',
             });
@@ -103,7 +104,7 @@ export default function Home() {
           } catch {
             const cached = apolloClient.readQuery({
               query: GET_FRIEND_LEDGER,
-              variables: { friendshipId: friend.friendshipId },
+              variables: { friendshipId: toDeterministicFriendshipUuid(String(friend.friendshipId || '')) },
             }) as { friendLedger?: { netBalance?: number } } | null;
             netBalance = Number(cached?.friendLedger?.netBalance || 0);
           }

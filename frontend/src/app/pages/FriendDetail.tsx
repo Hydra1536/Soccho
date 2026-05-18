@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { useQuery } from '@apollo/client';
 import api from '../../lib/api';
+import { toDeterministicFriendshipUuid } from '../../lib/friendshipKey';
 import { GET_FRIEND_LEDGER, GET_FRIENDS } from '../../graphql/queries';
 import { Avatar } from '../components/Avatar';
 import { StatusChip } from '../components/StatusChip';
@@ -56,6 +57,7 @@ export default function FriendDetail() {
   const [apiError, setApiError] = useState('');
 
   const myId = localStorage.getItem('user_id') || '';
+  const ledgerFriendshipId = toDeterministicFriendshipUuid(String(id || ''));
 
   const {
     data: friendsData,
@@ -73,7 +75,7 @@ export default function FriendDetail() {
     loading: ledgerLoading,
     error: ledgerError,
   } = useQuery<{ friendLedger: LedgerNode }>(GET_FRIEND_LEDGER, {
-    variables: { friendshipId: id },
+    variables: { friendshipId: ledgerFriendshipId },
     skip: !id,
     context: { service: 'transaction' },
   });
@@ -117,9 +119,9 @@ export default function FriendDetail() {
       await api.post('/api/transactions/', {
         lender_id: myId,
         borrower_id: friendUserId,
-        friendship_id: id,
+        friendship_id: ledgerFriendshipId,
         amount: Number(amount),
-        due_date: dueDate,
+        due_date: dueDate || null,
         idempotency_key: crypto.randomUUID(),
       });
       setAmount('');
