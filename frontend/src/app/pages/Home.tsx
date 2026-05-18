@@ -17,6 +17,13 @@ type DashboardSummaryNode = {
   totalLent: number;
   totalBorrowed: number;
   totalConfirmed: number;
+  loyaltyScore?: number;
+  monthlyTrend?: Array<{
+    monthKey: string;
+    label: string;
+    given: number;
+    received: number;
+  }>;
 };
 
 type FriendApiRow = {
@@ -318,15 +325,15 @@ export default function Home() {
   );
 
   const barData = useMemo(() => {
-    const base = Number(summary?.totalConfirmed || 0);
-    return [
-      { month: 'Jan', amount: base * 1 },
-      { month: 'Feb', amount: base * 1.2 },
-      { month: 'Mar', amount: base * 1.4 },
-      { month: 'Apr', amount: base * 1.1 },
-      { month: 'May', amount: base * 1.5 },
-      { month: 'Jun', amount: base * 1.7 },
-    ];
+    const rows = summary?.monthlyTrend || [];
+    if (!rows.length) {
+      return [];
+    }
+    return rows.map((row) => ({
+      month: row.label,
+      given: Number(row.given || 0),
+      received: Number(row.received || 0),
+    }));
   }, [summary]);
 
   return (
@@ -382,14 +389,28 @@ export default function Home() {
             </div>
 
             <div>
-              <ResponsiveContainer width="100%" height={150}>
-                <BarChart data={barData}>
-                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                  <Bar dataKey="amount" fill="#4F46E5" radius={[4, 4, 0, 0]} animationDuration={800} />
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="text-center text-xs text-[#6B7280] mt-2">Monthly Trend</p>
+              {barData.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <BarChart data={barData}>
+                      <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                      <Bar dataKey="given" fill="#4F46E5" radius={[4, 4, 0, 0]} animationDuration={800} />
+                      <Bar dataKey="received" fill="#818CF8" radius={[4, 4, 0, 0]} animationDuration={800} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <p className="text-center text-xs text-[#6B7280] mt-2">Monthly Trend</p>
+                  <p className="text-center text-[11px] text-[#6B7280] mt-1">Given vs Received</p>
+                </>
+              ) : (
+                <div className="h-[150px] rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] flex items-center justify-center">
+                  <p className="text-xs text-[#6B7280]">No monthly transaction data yet.</p>
+                </div>
+              )}
             </div>
+          </div>
+          <div className="mt-3 rounded-lg bg-[#EEF2FF] border border-[#C7D2FE] p-3">
+            <p className="text-xs text-[#3730A3]">Loyalty Score</p>
+            <p className="text-lg font-semibold text-[#1E1B4B]">{Number(summary?.loyaltyScore || 0).toFixed(1)} / 100</p>
           </div>
           <div className="grid grid-cols-3 gap-2 mt-4">
             <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 text-center">

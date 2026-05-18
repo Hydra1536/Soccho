@@ -39,7 +39,7 @@ export default function Profile() {
 
     const loadLoyaltyScore = async () => {
       try {
-        const { data } = await api.get<{ loyalty_score?: number }>('/api/social/loyalty-score/');
+        const { data } = await api.get<{ loyalty_score?: number }>('/api/transactions/loyalty-score/');
         if (!isMounted) {
           return;
         }

@@ -1,8 +1,8 @@
 from decimal import Decimal
 
 import graphene
-from django.db.models import Q
 
+from apps.transactions.analytics import compute_dashboard_summary
 from apps.balances.models import Balance
 from apps.transactions.models import Transaction
 
@@ -30,6 +30,15 @@ class DashboardSummaryType(graphene.ObjectType):
     total_lent = graphene.Float()
     total_borrowed = graphene.Float()
     total_confirmed = graphene.Int()
+    loyalty_score = graphene.Float()
+    monthly_trend = graphene.List(lambda: MonthlyTrendType)
+
+
+class MonthlyTrendType(graphene.ObjectType):
+    month_key = graphene.String()
+    label = graphene.String()
+    given = graphene.Float()
+    received = graphene.Float()
 
 
 def _requester_id(info):
@@ -97,16 +106,34 @@ def resolve_dashboard_summary(_root, info, user_id):
     if str(user_id) != requester_id:
         raise Exception('Forbidden')
 
-    qs = Transaction.objects.filter(is_deleted=False).filter(Q(lender_id=user_id) | Q(borrower_id=user_id))
-    lent_rows = list(qs.filter(lender_id=user_id, status=Transaction.STATUS_CONFIRMED).only('amount'))
-    borrowed_rows = list(qs.filter(borrower_id=user_id, status=Transaction.STATUS_CONFIRMED).only('amount'))
-    total_lent = sum((row.amount for row in lent_rows), start=Decimal('0'))
-    total_borrowed = sum((row.amount for row in borrowed_rows), start=Decimal('0'))
-    total_confirmed = len(lent_rows) + len(borrowed_rows)
+    try:
+        computed = compute_dashboard_summary(str(user_id))
+    except Exception:
+        computed = type(
+            'SummaryFallback',
+            (),
+            {
+                'total_lent': 0.0,
+                'total_borrowed': 0.0,
+                'total_confirmed': 0,
+                'loyalty_score': 0.0,
+                'monthly_trend': [],
+            },
+        )()
 
     return DashboardSummaryType(
         user_id=user_id,
-        total_lent=float(total_lent),
-        total_borrowed=float(total_borrowed),
-        total_confirmed=total_confirmed,
+        total_lent=computed.total_lent,
+        total_borrowed=computed.total_borrowed,
+        total_confirmed=computed.total_confirmed,
+        loyalty_score=computed.loyalty_score,
+        monthly_trend=[
+            MonthlyTrendType(
+                month_key=row.month_key,
+                label=row.label,
+                given=row.given,
+                received=row.received,
+            )
+            for row in computed.monthly_trend
+        ],
     )

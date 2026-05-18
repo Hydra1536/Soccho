@@ -7,6 +7,7 @@ from django.db import transaction as db_transaction
 from django.http import HttpRequest
 from ninja import NinjaAPI, Router
 
+from apps.transactions.analytics import compute_dashboard_summary
 from apps.balances.services import BalanceVersionConflict, update_balance, update_balance_latest
 from apps.transactions.models import Transaction
 from apps.transactions.schemas import ConfirmTransactionIn, ResolveTransactionIn, TransactionCreateIn, TransactionOut
@@ -22,6 +23,10 @@ def _redis_client():
 def _publish(event_name: str, payload: dict):
     client = _redis_client()
     client.publish(event_name, json.dumps(payload))
+
+
+def _requester_id(request: HttpRequest) -> str:
+    return str(request.headers.get('x-user-id', '')).strip()
 
 
 @router.post('/', response={201: TransactionOut, 200: TransactionOut, 409: dict})
@@ -133,6 +138,24 @@ def resolve_transaction(request: HttpRequest, transaction_id: str, payload: Reso
 
         tx = mark_denied(tx)
         return 200, tx
+
+
+@router.get('/loyalty-score/', response={200: dict, 401: dict})
+def loyalty_score(request: HttpRequest):
+    user_id = _requester_id(request)
+    if not user_id:
+        return 401, {'detail': 'Invalid credentials'}
+
+    try:
+        computed = compute_dashboard_summary(user_id)
+    except Exception:
+        computed = type('ScoreFallback', (), {'loyalty_score': 0.0, 'total_lent': 0.0, 'total_borrowed': 0.0})()
+    return 200, {
+        'user_id': user_id,
+        'loyalty_score': computed.loyalty_score,
+        'total_lent': computed.total_lent,
+        'total_borrowed': computed.total_borrowed,
+    }
 
 
 api = NinjaAPI(title='Soccho Transaction Service')

@@ -22,6 +22,13 @@ export const GET_DASHBOARD_SUMMARY = gql`
       totalLent
       totalBorrowed
       totalConfirmed
+      loyaltyScore
+      monthlyTrend {
+        monthKey
+        label
+        given
+        received
+      }
     }
   }
 `;

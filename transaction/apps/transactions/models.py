@@ -32,5 +32,7 @@ class Transaction(models.Model):
         indexes = [
             models.Index(fields=['friendship_id', 'status'], name='txn_friend_status_idx'),
             models.Index(fields=['borrower_id', 'status'], name='txn_borrower_status_idx'),
+            models.Index(fields=['lender_id', 'status', 'created_at'], name='txn_lender_status_created_idx'),
+            models.Index(fields=['borrower_id', 'status', 'created_at'], name='txn_borrower_status_created_idx'),
             models.Index(fields=['due_date'], name='txn_due_date_idx'),
         ]
