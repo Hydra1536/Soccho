@@ -159,7 +159,7 @@ export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
               <div className="flex items-center gap-2">
                 <Calculator size={20} className="text-[#111827]" />
                 <h2 className="font-bold text-lg" style={{ fontFamily: 'var(--font-display)' }}>
-                  EqualPay
+                  Soccho
                 </h2>
               </div>
               <button onClick={onClose} className="p-2 hover:bg-[#F3F4F6] rounded-lg transition-colors">
@@ -174,7 +174,7 @@ export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
                   পাবে বা কাকে কত দিতে হবে, তার একটি পরিষ্কার তালিকা পেতে সবার নাম এবং কে কত খরচ করেছে তা
                   যোগ করুন।
                 </p>
-                <p className="mt-2">আড্ডা হবে প্রাণখুলে, আর হিসাব হবে EqualPay-তে!✨</p>
+                <p className="mt-2">আড্ডা হবে প্রাণখুলে, আর হিসাব হবে Soccho-তে!✨</p>
               </div>
 
               <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
