@@ -65,9 +65,27 @@ def _emit_friend_request_notification(friendship: Friendship):
         'title': 'New friend request',
         'body': f"{_username_for_user_id(friendship.requester_id) or 'Someone'} sent you a friend request",
     }
+    _publish_notification_event('friend.request', payload)
+
+
+def _emit_friend_accept_notification(friendship: Friendship, accepter_id: UUID):
+    requester_id = str(friendship.requester_id)
+    accepter_username = _username_for_user_id(accepter_id) or 'Your friend'
+    payload = {
+        'recipient_id': requester_id,
+        'requester_id': str(friendship.requester_id),
+        'addressee_id': str(friendship.addressee_id),
+        'friendship_id': str(friendship.id),
+        'title': 'Friend request accepted',
+        'body': f'{accepter_username} accepted your friend request',
+    }
+    _publish_notification_event('friend.accepted', payload)
+
+
+def _publish_notification_event(channel: str, payload: dict):
     try:
         client = redis.from_url(settings.REDIS_CACHE_URL, decode_responses=True)
-        client.publish('friend.request', json.dumps(payload))
+        client.publish(channel, json.dumps(payload))
         client.close()
     except redis.RedisError:
         return
@@ -166,6 +184,7 @@ class AcceptRequestView(APIView):
 
         friendship.status = Friendship.STATUS_ACCEPTED
         friendship.save(update_fields=['status', 'updated_at'])
+        _emit_friend_accept_notification(friendship, current_user_id)
         return Response(FriendshipSerializer(friendship).data, status=status.HTTP_200_OK)
 
 

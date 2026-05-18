@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { BottomNav } from '../components/BottomNav';
 import { fetchCurrentUser, logout } from '../../lib/auth';
-import { EMAIL_KEY, USERNAME_KEY, getApiErrorMessage } from '../../lib/api';
+import api, { EMAIL_KEY, USERNAME_KEY, getApiErrorMessage } from '../../lib/api';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -12,6 +12,7 @@ export default function Profile() {
   const [userEmail, setUserEmail] = useState(localStorage.getItem(EMAIL_KEY) || '');
   const [profileError, setProfileError] = useState('');
   const [canChangePassword, setCanChangePassword] = useState(false);
+  const [loyaltyScore, setLoyaltyScore] = useState<number | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -36,7 +37,25 @@ export default function Profile() {
       }
     };
 
+    const loadLoyaltyScore = async () => {
+      try {
+        const { data } = await api.get<{ loyalty_score?: number }>('/api/social/loyalty-score/');
+        if (!isMounted) {
+          return;
+        }
+        const raw = Number(data?.loyalty_score ?? 0);
+        const bounded = Math.max(0, Math.min(100, Number.isFinite(raw) ? raw : 0));
+        setLoyaltyScore(bounded);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+        setLoyaltyScore(null);
+      }
+    };
+
     void loadProfile();
+    void loadLoyaltyScore();
 
     return () => {
       isMounted = false;
@@ -70,6 +89,15 @@ export default function Profile() {
             {userName || 'Loading profile...'}
           </h2>
           <p className="text-sm text-[#6B7280]">{userEmail || 'Fetching your account details...'}</p>
+          {loyaltyScore !== null && (
+            <div className="mt-4">
+              <p className="text-xs text-[#6B7280] mb-1">Loyalty Score</p>
+              <div className="h-2 rounded-full bg-[#E5E7EB] overflow-hidden">
+                <div className="h-full bg-[#4F46E5] rounded-full transition-all" style={{ width: `${loyaltyScore}%` }} />
+              </div>
+              <p className="text-sm text-[#111827] mt-2 font-medium">{loyaltyScore.toFixed(1)} / 100</p>
+            </div>
+          )}
           {profileError && <p className="mt-3 text-sm text-[#EF4444]">{profileError}</p>}
         </div>
 

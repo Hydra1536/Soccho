@@ -4,7 +4,7 @@ from django.urls import include, path
 from django.views.decorators.csrf import csrf_exempt
 from graphene_django.views import GraphQLView
 
-from apps.search.views import SearchHistoryView, UserSearchView
+from apps.search.views import LoyaltyScoreView, SearchHistoryView, UserSearchView
 
 
 def health(_request):
@@ -17,5 +17,6 @@ urlpatterns = [
     path('api/social/', include('apps.friendships.urls')),
     path('api/social/search/', UserSearchView.as_view(), name='social-search'),
     path('api/social/search/history/', SearchHistoryView.as_view(), name='social-search-history'),
+    path('api/social/loyalty-score/', LoyaltyScoreView.as_view(), name='social-loyalty-score'),
     path('graphql/', csrf_exempt(GraphQLView.as_view(graphiql=False))),
 ]

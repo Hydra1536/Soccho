@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, Calculator } from 'lucide-react';
 import { Link } from 'react-router';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, ResponsiveContainer } from 'recharts';
 import { useApolloClient, useQuery } from '@apollo/client';
 import { GET_DASHBOARD_SUMMARY, GET_FRIEND_LEDGER, GET_FRIENDS } from '../../graphql/queries';
 import { Avatar } from '../components/Avatar';
 import { BalanceChip } from '../components/BalanceChip';
+import { EqualPayDrawer } from '../components/EqualPayDrawer';
 import { NotificationDrawer, type NotificationItem } from '../components/NotificationDrawer';
 import { BottomNav } from '../components/BottomNav';
 
@@ -38,6 +39,7 @@ type FriendCard = {
 export default function Home() {
   const apolloClient = useApolloClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [equalPayOpen, setEqualPayOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [friendCards, setFriendCards] = useState<FriendCard[]>([]);
@@ -152,12 +154,8 @@ export default function Home() {
     <div className="min-h-screen bg-[#F3F4F6] pb-20">
       <div className="bg-white border-b border-[#E5E7EB] sticky top-0 z-10">
         <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
-          <button onClick={() => setDrawerOpen(true)} className="p-2 hover:bg-[#F3F4F6] rounded-lg transition-colors">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <line x1="3" y1="6" x2="21" y2="6" strokeWidth="2" strokeLinecap="round" />
-              <line x1="3" y1="12" x2="21" y2="12" strokeWidth="2" strokeLinecap="round" />
-              <line x1="3" y1="18" x2="21" y2="18" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+          <button onClick={() => setEqualPayOpen(true)} className="p-2 hover:bg-[#F3F4F6] rounded-lg transition-colors" aria-label="Open EqualPay Calculator">
+            <Calculator size={24} />
           </button>
 
           <h1 className="font-bold text-xl" style={{ fontFamily: 'var(--font-display)' }}>
@@ -182,6 +180,7 @@ export default function Home() {
         onNotificationsChange={setNotifications}
         onUnreadCountChange={setNotificationCount}
       />
+      <EqualPayDrawer isOpen={equalPayOpen} onClose={() => setEqualPayOpen(false)} />
 
       <div className="max-w-md mx-auto px-4 py-6 space-y-6">
         <div className="bg-white rounded-2xl p-6 shadow-sm">

@@ -58,3 +58,11 @@ class SearchHistoryView(APIView):
         if not user_id:
             return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
         return Response({'history': get_search_history(user_id)})
+
+
+class LoyaltyScoreView(APIView):
+    def get(self, request):
+        user_id = _current_user_id(request)
+        if not user_id:
+            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response({'user_id': user_id, 'loyalty_score': get_loyalty_score(user_id)}, status=status.HTTP_200_OK)

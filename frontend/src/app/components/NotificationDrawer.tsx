@@ -49,6 +49,7 @@ type NotificationListResponse = {
 export function NotificationDrawer({ isOpen, onClose, notifications, onNotificationsChange, onUnreadCountChange }: NotificationDrawerProps) {
   const navigate = useNavigate();
   const wsRef = useRef<WebSocket | null>(null);
+  const isOpenRef = useRef<boolean>(isOpen);
   const notificationsRef = useRef<NotificationItem[]>(notifications);
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -57,24 +58,17 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
   const [loadingInitial, setLoadingInitial] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showMoreButton, setShowMoreButton] = useState(false);
-  const [seenAt, setSeenAt] = useState<number>(Date.now());
+  const [unseenIds, setUnseenIds] = useState<string[]>([]);
 
   useEffect(() => {
     notificationsRef.current = notifications;
   }, [notifications]);
 
-  const unreadCount = useMemo(() => {
-    if (isOpen) {
-      return 0;
-    }
-    return notifications.filter((notification) => {
-      const ts = Date.parse(notification.timestamp || '');
-      if (Number.isNaN(ts)) {
-        return false;
-      }
-      return ts > seenAt;
-    }).length;
-  }, [isOpen, notifications, seenAt]);
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  const unreadCount = useMemo(() => (isOpen ? 0 : unseenIds.length), [isOpen, unseenIds.length]);
 
   useEffect(() => {
     onUnreadCountChange?.(unreadCount);
@@ -93,15 +87,16 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
 
   const toNotificationItem = (row: ApiNotificationRow): NotificationItem => {
     const isFriendRequest = row.type === 'friend_request';
+    const isFriendAccepted = row.type === 'friend_accepted';
     const mappedType: NotificationItem['type'] =
       row.type === 'lend_confirmation' ? 'pending' : row.type === 'due_reminder' ? 'reminder' : 'received';
     return {
       id: String(row.id || crypto.randomUUID()),
       type: mappedType,
-      title: row.payload?.title || (isFriendRequest ? 'New friend request' : 'Notification'),
+      title: row.payload?.title || (isFriendRequest ? 'New friend request' : isFriendAccepted ? 'Friend request accepted' : 'Notification'),
       message: row.payload?.body || 'You have a new notification.',
       timestamp: row.created_at || new Date().toISOString(),
-      route: isFriendRequest ? '/friends' : undefined,
+      route: isFriendRequest || isFriendAccepted ? '/friends' : undefined,
     };
   };
 
@@ -152,15 +147,9 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     if (!isOpen) {
       return;
     }
-    setSeenAt(Date.now());
+    setUnseenIds([]);
     void fetchNotificationPage(null, false);
   }, [isOpen]);
-
-  useEffect(() => {
-    if (isOpen) {
-      setSeenAt(Date.now());
-    }
-  }, [isOpen, notifications.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -209,6 +198,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
             || payload?.event === 'notification.push'
             || payload?.event === 'notification.pending'
             || payload?.event === 'friend.request'
+            || payload?.event === 'friend.accepted'
           ) {
             const row = payload.notification || {};
             const item: NotificationItem = {
@@ -217,9 +207,23 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
               title: row.payload?.title || payload?.event || 'Notification',
               message: row.payload?.body || 'You have a new notification.',
               timestamp: row.created_at || new Date().toISOString(),
-              route: payload?.event === 'friend.request' || row.type === 'friend_request' ? '/friends' : undefined,
+              route:
+                payload?.event === 'friend.request'
+                || payload?.event === 'friend.accepted'
+                || row.type === 'friend_request'
+                || row.type === 'friend_accepted'
+                  ? '/friends'
+                  : undefined,
             };
             onNotificationsChange?.(dedupeById([item, ...notificationsRef.current]));
+            if (!isOpenRef.current) {
+              setUnseenIds((prev) => {
+                if (prev.includes(item.id)) {
+                  return prev;
+                }
+                return [item.id, ...prev];
+              });
+            }
           }
         } catch {
           return;
@@ -312,11 +316,11 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
 
           <motion.div
-            initial={{ x: '-100%' }}
+            initial={{ x: '100%' }}
             animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
+            exit={{ x: '100%' }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="fixed left-0 top-0 bottom-0 w-[70%] bg-white z-50 shadow-2xl rounded-r-2xl overflow-y-auto"
+            className="fixed right-0 top-0 bottom-0 w-[70%] bg-white z-50 shadow-2xl rounded-l-2xl overflow-y-auto"
             ref={listRef}
             onScroll={handleListScroll}
           >
