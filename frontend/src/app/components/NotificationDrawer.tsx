@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { X, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate } from 'react-router';
 import { getValidAccessToken } from '../../lib/api';
 
 export interface NotificationItem {
@@ -9,6 +10,7 @@ export interface NotificationItem {
   title: string;
   message: string;
   timestamp: string;
+  route?: string;
 }
 
 interface NotificationDrawerProps {
@@ -29,6 +31,7 @@ function toWsUrl(httpUrl: string): string {
 }
 
 export function NotificationDrawer({ isOpen, onClose, notifications, onNotificationsChange, onUnreadCountChange }: NotificationDrawerProps) {
+  const navigate = useNavigate();
   const wsRef = useRef<WebSocket | null>(null);
   const notificationsRef = useRef<NotificationItem[]>(notifications);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -99,6 +102,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
               title: row.payload?.title || payload?.event || 'Notification',
               message: row.payload?.body || 'You have a new notification.',
               timestamp: row.created_at || new Date().toISOString(),
+              route: payload?.event === 'friend.request' || row.type === 'friend_request' ? '/friends' : undefined,
             };
             onNotificationsChange?.([item, ...notificationsRef.current]);
           }
@@ -162,6 +166,14 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     }
   };
 
+  const handleNotificationClick = (notification: NotificationItem) => {
+    if (!notification.route) {
+      return;
+    }
+    onClose();
+    navigate(notification.route);
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -186,7 +198,22 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
 
             <div className="p-4 space-y-3">
               {notifications.map((notification) => (
-                <div key={notification.id} className={`p-4 bg-white border-l-4 ${getBorderColor(notification.type)} rounded-lg shadow-sm`}>
+                <div
+                  key={notification.id}
+                  className={`p-4 bg-white border-l-4 ${getBorderColor(notification.type)} rounded-lg shadow-sm ${notification.route ? 'cursor-pointer hover:bg-[#F9FAFB]' : ''}`}
+                  onClick={() => handleNotificationClick(notification)}
+                  role={notification.route ? 'button' : undefined}
+                  tabIndex={notification.route ? 0 : undefined}
+                  onKeyDown={(event) => {
+                    if (!notification.route) {
+                      return;
+                    }
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleNotificationClick(notification);
+                    }
+                  }}
+                >
                   <div className="flex items-start gap-3">
                     {getIcon(notification.type)}
                     <div className="flex-1">
