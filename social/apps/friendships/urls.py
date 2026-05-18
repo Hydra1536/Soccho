@@ -6,6 +6,7 @@ from apps.friendships.views import (
     ListPendingRequestsView,
     RejectRequestView,
     SendRequestView,
+    UnfriendView,
 )
 
 urlpatterns = [
@@ -13,6 +14,7 @@ urlpatterns = [
     path('accept/', AcceptRequestView.as_view(), name='accept-friend-request'),
     path('reject/', RejectRequestView.as_view(), name='reject-friend-request'),
     path('requests/', ListPendingRequestsView.as_view(), name='list-pending-requests'),
+    path('unfriend/', UnfriendView.as_view(), name='unfriend'),
     path('list/', ListFriendsView.as_view(), name='list-friends'),
     path('friends/', ListFriendsView.as_view(), name='friends'),
 ]

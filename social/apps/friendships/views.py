@@ -1,7 +1,10 @@
 from uuid import UUID
 
+import json
+import redis
 from django.db import IntegrityError
 from django.db.models import Q
+from django.conf import settings
 from rest_framework import status
 from rest_framework.pagination import CursorPagination
 from rest_framework.response import Response
@@ -49,6 +52,27 @@ def _usernames_for_ids(user_ids: set[str]) -> dict[str, str]:
     }
 
 
+def _username_for_user_id(user_id: UUID) -> str:
+    row = SearchableUser.objects.filter(id=user_id).first()
+    return row.username if row is not None else ''
+
+
+def _emit_friend_request_notification(friendship: Friendship):
+    payload = {
+        'recipient_id': str(friendship.addressee_id),
+        'requester_id': str(friendship.requester_id),
+        'friendship_id': str(friendship.id),
+        'title': 'New friend request',
+        'body': f"{_username_for_user_id(friendship.requester_id) or 'Someone'} sent you a friend request",
+    }
+    try:
+        client = redis.from_url(settings.REDIS_CACHE_URL, decode_responses=True)
+        client.publish('friend.request', json.dumps(payload))
+        client.close()
+    except redis.RedisError:
+        return
+
+
 def _idempotent_friendship_response(friendship: Friendship, requester_id: UUID, addressee_id: UUID):
     if friendship.status == Friendship.STATUS_ACCEPTED:
         return Response(
@@ -77,6 +101,7 @@ def _idempotent_friendship_response(friendship: Friendship, requester_id: UUID, 
         friendship.addressee_id = addressee_id
         friendship.status = Friendship.STATUS_PENDING
         friendship.save(update_fields=['requester_id', 'addressee_id', 'status', 'updated_at'])
+        _emit_friend_request_notification(friendship)
         return Response(
             {
                 'detail': 'Friend request sent',
@@ -116,6 +141,7 @@ class SendRequestView(APIView):
                 return _idempotent_friendship_response(existing, requester_id, addressee_id)
             return Response({'detail': 'Friendship already exists'}, status=status.HTTP_409_CONFLICT)
 
+        _emit_friend_request_notification(friendship)
         return Response(FriendshipSerializer(friendship).data, status=status.HTTP_201_CREATED)
 
 
@@ -223,3 +249,27 @@ class ListPendingRequestsView(APIView):
             outgoing_payload.append(serialized)
 
         return Response({'incoming': incoming_payload, 'outgoing': outgoing_payload}, status=status.HTTP_200_OK)
+
+
+class UnfriendView(APIView):
+    def post(self, request):
+        serializer = FriendshipActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        current_user_id = _current_user_id(request)
+        if current_user_id is None:
+            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+        target_user_id = serializer.validated_data['user_id']
+        if current_user_id == target_user_id:
+            return Response({'detail': 'Cannot unfriend yourself'}, status=status.HTTP_400_BAD_REQUEST)
+
+        friendship = Friendship.objects.filter(
+            Q(requester_id=current_user_id, addressee_id=target_user_id)
+            | Q(requester_id=target_user_id, addressee_id=current_user_id),
+            status=Friendship.STATUS_ACCEPTED,
+        ).first()
+        if friendship is None:
+            return Response({'detail': 'Friendship not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        friendship.delete()
+        return Response({'detail': 'Unfriended successfully'}, status=status.HTTP_200_OK)

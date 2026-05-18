@@ -12,12 +12,14 @@ from apps.notifications.models import Notification
 def _map_event_to_notification(channel: str, payload: dict):
     if channel == 'transaction.created':
         ntype = Notification.TYPE_LEND_CONFIRMATION
+    elif channel == 'friend.request':
+        ntype = Notification.TYPE_FRIEND_REQUEST
     elif channel == 'transaction.confirmed':
         ntype = Notification.TYPE_PAYMENT_ACK
     else:
         ntype = Notification.TYPE_DUE_REMINDER
 
-    recipient_id = payload.get('borrower_id') or payload.get('recipient_id')
+    recipient_id = payload.get('recipient_id') or payload.get('borrower_id') or payload.get('addressee_id')
     return recipient_id, ntype
 
 
@@ -42,7 +44,7 @@ def _persist_notification(recipient_id: str, ntype: str, payload: dict):
 async def run_pubsub_listener():
     client = redis.from_url(settings.REDIS_CACHE_URL, decode_responses=True)
     pubsub = client.pubsub()
-    await pubsub.subscribe('transaction.created', 'transaction.confirmed', 'transaction.due_reminder')
+    await pubsub.subscribe('transaction.created', 'transaction.confirmed', 'transaction.due_reminder', 'friend.request')
 
     layer = get_channel_layer()
 
@@ -74,6 +76,6 @@ async def run_pubsub_listener():
                 },
             )
     finally:
-        await pubsub.unsubscribe('transaction.created', 'transaction.confirmed', 'transaction.due_reminder')
+        await pubsub.unsubscribe('transaction.created', 'transaction.confirmed', 'transaction.due_reminder', 'friend.request')
         await pubsub.close()
         await client.close()

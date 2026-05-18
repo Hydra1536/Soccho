@@ -52,6 +52,7 @@ export default function FriendDetail() {
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [loading, setLoading] = useState(false);
+  const [unfriendLoading, setUnfriendLoading] = useState(false);
   const [apiError, setApiError] = useState('');
 
   const myId = localStorage.getItem('user_id') || '';
@@ -130,6 +131,26 @@ export default function FriendDetail() {
     }
   };
 
+  const handleUnfriend = async () => {
+    if (!friendUserId || unfriendLoading) {
+      return;
+    }
+    if (!window.confirm(`Remove ${friendName} from your friends?`)) {
+      return;
+    }
+
+    setUnfriendLoading(true);
+    setApiError('');
+    try {
+      await api.post('/api/social/unfriend/', { user_id: friendUserId });
+      navigate('/home');
+    } catch {
+      setApiError('Unable to unfriend right now. Please try again.');
+    } finally {
+      setUnfriendLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F3F4F6] pb-20">
       <div className="bg-white border-b border-[#E5E7EB] sticky top-0 z-10">
@@ -160,6 +181,17 @@ export default function FriendDetail() {
             {netBalance >= 0 ? '+' : '-'}TK {Math.abs(netBalance).toLocaleString()}
           </p>
           <p className="text-xs text-[#6B7280] mt-2">{netBalance >= 0 ? 'They owe you' : 'You owe them'}</p>
+          <button
+            onClick={() => void handleUnfriend()}
+            disabled={!friendUserId || unfriendLoading}
+            className={`mt-5 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !friendUserId || unfriendLoading
+                ? 'bg-[#E5E7EB] text-[#6B7280]'
+                : 'bg-[#FEE2E2] text-[#B91C1C] hover:bg-[#FECACA]'
+            }`}
+          >
+            {unfriendLoading ? 'Removing...' : 'Unfriend'}
+          </button>
         </div>
 
         <div className="bg-white rounded-2xl p-6 shadow-sm">

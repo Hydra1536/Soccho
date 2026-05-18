@@ -38,7 +38,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     notificationsRef.current = notifications;
   }, [notifications]);
 
-  const unreadCount = useMemo(() => notifications.filter((n) => n.type === 'pending').length, [notifications]);
+  const unreadCount = useMemo(() => notifications.length, [notifications]);
 
   useEffect(() => {
     onUnreadCountChange?.(unreadCount);
@@ -86,13 +86,18 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       ws.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
-          if (payload?.event === 'transaction.created' || payload?.event === 'notification.push' || payload?.event === 'notification.pending') {
+          if (
+            payload?.event === 'transaction.created'
+            || payload?.event === 'notification.push'
+            || payload?.event === 'notification.pending'
+            || payload?.event === 'friend.request'
+          ) {
             const row = payload.notification || {};
             const item: NotificationItem = {
               id: String(row.id || crypto.randomUUID()),
               type: payload?.event === 'transaction.created' ? 'pending' : row.type === 'due_reminder' ? 'reminder' : 'received',
               title: row.payload?.title || payload?.event || 'Notification',
-              message: row.payload?.body || JSON.stringify(row.payload || {}),
+              message: row.payload?.body || 'You have a new notification.',
               timestamp: row.created_at || new Date().toISOString(),
             };
             onNotificationsChange?.([item, ...notificationsRef.current]);

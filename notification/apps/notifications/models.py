@@ -7,11 +7,13 @@ class Notification(models.Model):
     TYPE_LEND_CONFIRMATION = 'lend_confirmation'
     TYPE_PAYMENT_ACK = 'payment_ack'
     TYPE_DUE_REMINDER = 'due_reminder'
+    TYPE_FRIEND_REQUEST = 'friend_request'
 
     TYPE_CHOICES = (
         (TYPE_LEND_CONFIRMATION, 'Lend Confirmation'),
         (TYPE_PAYMENT_ACK, 'Payment Acknowledgement'),
         (TYPE_DUE_REMINDER, 'Due Reminder'),
+        (TYPE_FRIEND_REQUEST, 'Friend Request'),
     )
 
     id = models.BigAutoField(primary_key=True)
