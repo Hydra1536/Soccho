@@ -9,6 +9,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 
 from apps.notifications.models import Notification
+from apps.notifications.retention import cleanup_expired_notifications, retention_cutoff
 
 
 class NotificationConsumer(AsyncWebsocketConsumer):
@@ -19,6 +20,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         self.breaker = pybreaker.CircuitBreaker(fail_max=5, reset_timeout=30)
 
     async def connect(self):
+        await self._cleanup_expired_notifications()
         token = self._extract_token()
         if not token:
             await self.close(code=4401)
@@ -153,7 +155,11 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _get_pending_notifications(self, user_id: str):
-        rows = Notification.objects.filter(recipient_id=user_id, is_cleared=False).order_by('-created_at')
+        rows = Notification.objects.filter(
+            recipient_id=user_id,
+            is_cleared=False,
+            created_at__gte=retention_cutoff(),
+        ).order_by('-created_at')
         return [
             {
                 'id': row.id,
@@ -165,6 +171,10 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             }
             for row in rows
         ]
+
+    @database_sync_to_async
+    def _cleanup_expired_notifications(self):
+        cleanup_expired_notifications()
 
     @database_sync_to_async
     def _clear_notification(self, notification_id: str, user_id: str):

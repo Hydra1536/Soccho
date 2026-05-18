@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router';
-import { getValidAccessToken } from '../../lib/api';
+import api, { getValidAccessToken } from '../../lib/api';
 
 export interface NotificationItem {
   id: string;
@@ -30,22 +30,137 @@ function toWsUrl(httpUrl: string): string {
   return `${scheme}//${url.host}`;
 }
 
+type ApiNotificationRow = {
+  id: string | number;
+  type: string;
+  payload?: {
+    title?: string;
+    body?: string;
+  };
+  created_at?: string;
+};
+
+type NotificationListResponse = {
+  next: string | null;
+  previous: string | null;
+  results: ApiNotificationRow[];
+};
+
 export function NotificationDrawer({ isOpen, onClose, notifications, onNotificationsChange, onUnreadCountChange }: NotificationDrawerProps) {
   const navigate = useNavigate();
   const wsRef = useRef<WebSocket | null>(null);
   const notificationsRef = useRef<NotificationItem[]>(notifications);
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingInitial, setLoadingInitial] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [showMoreButton, setShowMoreButton] = useState(false);
+  const [seenAt, setSeenAt] = useState<number>(Date.now());
 
   useEffect(() => {
     notificationsRef.current = notifications;
   }, [notifications]);
 
-  const unreadCount = useMemo(() => notifications.length, [notifications]);
+  const unreadCount = useMemo(() => {
+    if (isOpen) {
+      return 0;
+    }
+    return notifications.filter((notification) => {
+      const ts = Date.parse(notification.timestamp || '');
+      if (Number.isNaN(ts)) {
+        return false;
+      }
+      return ts > seenAt;
+    }).length;
+  }, [isOpen, notifications, seenAt]);
 
   useEffect(() => {
     onUnreadCountChange?.(unreadCount);
   }, [unreadCount, onUnreadCountChange]);
+
+  const dedupeById = (items: NotificationItem[]) => {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      if (seen.has(item.id)) {
+        return false;
+      }
+      seen.add(item.id);
+      return true;
+    });
+  };
+
+  const toNotificationItem = (row: ApiNotificationRow): NotificationItem => {
+    const isFriendRequest = row.type === 'friend_request';
+    const mappedType: NotificationItem['type'] =
+      row.type === 'lend_confirmation' ? 'pending' : row.type === 'due_reminder' ? 'reminder' : 'received';
+    return {
+      id: String(row.id || crypto.randomUUID()),
+      type: mappedType,
+      title: row.payload?.title || (isFriendRequest ? 'New friend request' : 'Notification'),
+      message: row.payload?.body || 'You have a new notification.',
+      timestamp: row.created_at || new Date().toISOString(),
+      route: isFriendRequest ? '/friends' : undefined,
+    };
+  };
+
+  const extractCursor = (nextUrl: string | null): string | null => {
+    if (!nextUrl) {
+      return null;
+    }
+    try {
+      const parsed = nextUrl.startsWith('http') ? new URL(nextUrl) : new URL(nextUrl, window.location.origin);
+      return parsed.searchParams.get('cursor');
+    } catch {
+      return null;
+    }
+  };
+
+  const fetchNotificationPage = async (cursor: string | null, append: boolean) => {
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoadingInitial(true);
+    }
+
+    try {
+      const params = cursor ? { cursor } : {};
+      const { data } = await api.get<NotificationListResponse>('/api/notification/list/', { params });
+      const mapped = (data?.results || []).map(toNotificationItem);
+      const nextItems = append
+        ? dedupeById([...notificationsRef.current, ...mapped])
+        : dedupeById(mapped);
+      onNotificationsChange?.(nextItems);
+      setNextCursor(extractCursor(data?.next || null));
+      setShowMoreButton(false);
+    } catch {
+      if (!append) {
+        onNotificationsChange?.([]);
+      }
+      setNextCursor(null);
+    } finally {
+      if (append) {
+        setLoadingMore(false);
+      } else {
+        setLoadingInitial(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    setSeenAt(Date.now());
+    void fetchNotificationPage(null, false);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSeenAt(Date.now());
+    }
+  }, [isOpen, notifications.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +219,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
               timestamp: row.created_at || new Date().toISOString(),
               route: payload?.event === 'friend.request' || row.type === 'friend_request' ? '/friends' : undefined,
             };
-            onNotificationsChange?.([item, ...notificationsRef.current]);
+            onNotificationsChange?.(dedupeById([item, ...notificationsRef.current]));
           }
         } catch {
           return;
@@ -174,6 +289,22 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     navigate(notification.route);
   };
 
+  const handleListScroll = () => {
+    const el = listRef.current;
+    if (!el) {
+      return;
+    }
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 80;
+    setShowMoreButton(nearBottom && !!nextCursor);
+  };
+
+  const handleShowMore = async () => {
+    if (!nextCursor || loadingMore) {
+      return;
+    }
+    await fetchNotificationPage(nextCursor, true);
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -186,6 +317,8 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
             exit={{ x: '-100%' }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="fixed left-0 top-0 bottom-0 w-[70%] bg-white z-50 shadow-2xl rounded-r-2xl overflow-y-auto"
+            ref={listRef}
+            onScroll={handleListScroll}
           >
             <div className="p-4 border-b border-[#E5E7EB] flex items-center justify-between sticky top-0 bg-white">
               <h2 className="font-bold text-lg" style={{ fontFamily: 'var(--font-display)' }}>
@@ -197,6 +330,9 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
             </div>
 
             <div className="p-4 space-y-3">
+              {loadingInitial && (
+                <p className="text-sm text-[#6B7280]">Loading notifications...</p>
+              )}
               {notifications.map((notification) => (
                 <div
                   key={notification.id}
@@ -239,6 +375,20 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
               {notifications.length === 0 && (
                 <div className="text-center py-12 text-[#6B7280]">
                   <p>No notifications</p>
+                </div>
+              )}
+
+              {showMoreButton && !!nextCursor && (
+                <div className="pt-2">
+                  <button
+                    onClick={() => void handleShowMore()}
+                    disabled={loadingMore}
+                    className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      loadingMore ? 'bg-[#E5E7EB] text-[#6B7280]' : 'bg-[#111827] text-white hover:bg-black'
+                    }`}
+                  >
+                    {loadingMore ? 'Loading...' : 'Show more'}
+                  </button>
                 </div>
               )}
             </div>

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 
 import redis.asyncio as redis
 from asgiref.sync import sync_to_async
@@ -7,6 +8,7 @@ from channels.layers import get_channel_layer
 from django.conf import settings
 
 from apps.notifications.models import Notification
+from apps.notifications.retention import cleanup_expired_notifications
 
 
 def _map_event_to_notification(channel: str, payload: dict):
@@ -47,9 +49,15 @@ async def run_pubsub_listener():
     await pubsub.subscribe('transaction.created', 'transaction.confirmed', 'transaction.due_reminder', 'friend.request')
 
     layer = get_channel_layer()
+    last_cleanup_epoch = 0.0
 
     try:
         while True:
+            now_epoch = time.time()
+            if now_epoch - last_cleanup_epoch >= 600:
+                await sync_to_async(cleanup_expired_notifications)()
+                last_cleanup_epoch = now_epoch
+
             message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
             if message is None:
                 await asyncio.sleep(0.1)
