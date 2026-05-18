@@ -30,6 +30,20 @@ type PendingRequestRow = {
   status: string;
 };
 
+type FriendListRow = {
+  id: string;
+  requester_id: string;
+  addressee_id: string;
+  counterpart_id: string;
+  counterpart_username?: string;
+  status: string;
+};
+
+type FriendListResponse = {
+  next?: string | null;
+  results?: FriendListRow[];
+};
+
 export default function FindFriends() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,6 +54,7 @@ export default function FindFriends() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchErrorMessage, setSearchErrorMessage] = useState('');
   const [requestedUserIds, setRequestedUserIds] = useState<Record<string, boolean>>({});
+  const [acceptedFriendships, setAcceptedFriendships] = useState<Record<string, string>>({});
   const [requestInFlight, setRequestInFlight] = useState<Record<string, boolean>>({});
   const [incomingRequests, setIncomingRequests] = useState<PendingRequestRow[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
@@ -107,8 +122,57 @@ export default function FindFriends() {
     }
   };
 
+  const fetchAcceptedFriends = async () => {
+    const byUserId: Record<string, string> = {};
+    let cursor: string | null = null;
+    let safety = 0;
+    const currentUserId = String(localStorage.getItem(USER_ID_KEY) || '').trim();
+
+    try {
+      while (safety < 50) {
+        const params = cursor ? { cursor } : {};
+        const { data } = await api.get<FriendListResponse>('/api/social/list/', { params });
+        const rows = Array.isArray(data?.results) ? data.results : [];
+        rows.forEach((row) => {
+          const requesterId = String(row.requester_id || '').trim();
+          const addresseeId = String(row.addressee_id || '').trim();
+          const fallbackCounterpartId =
+            requesterId && addresseeId
+              ? (requesterId === currentUserId ? addresseeId : requesterId)
+              : '';
+          const counterpartId = String(row.counterpart_id || fallbackCounterpartId || '').trim();
+          const friendshipId = String(row.id || '').trim();
+          if (counterpartId && friendshipId) {
+            byUserId[counterpartId] = friendshipId;
+          }
+        });
+
+        const next = data?.next || null;
+        if (!next) {
+          break;
+        }
+
+        try {
+          const parsed = next.startsWith('http') ? new URL(next) : new URL(next, window.location.origin);
+          cursor = parsed.searchParams.get('cursor');
+        } catch {
+          cursor = null;
+        }
+
+        if (!cursor) {
+          break;
+        }
+        safety += 1;
+      }
+      setAcceptedFriendships(byUserId);
+    } catch {
+      setAcceptedFriendships({});
+    }
+  };
+
   useEffect(() => {
     void fetchPendingRequests();
+    void fetchAcceptedFriends();
   }, []);
 
   useEffect(() => {
@@ -199,6 +263,7 @@ export default function FindFriends() {
       await api.post(endpoint, { user_id: requesterId });
       setIncomingRequests((prev) => prev.filter((row) => String(row.id) !== requestId));
       void fetchPendingRequests();
+      void fetchAcceptedFriends();
     } catch (error) {
       setSearchErrorMessage(getErrorMessage(error));
     } finally {
@@ -309,11 +374,33 @@ export default function FindFriends() {
             <div className="space-y-3">
               {searchResults.map((person, idx) => {
                 const targetId = String(person.user_id || person.id || '').trim();
+                const friendshipId = targetId ? acceptedFriendships[targetId] : '';
+                const isAlreadyFriend = !!friendshipId;
                 const isRequested = targetId ? !!requestedUserIds[targetId] : false;
                 const isLoading = targetId ? !!requestInFlight[targetId] : false;
 
                 return (
-                <div key={person.user_id || person.id || idx} className="bg-white rounded-2xl p-4 shadow-sm">
+                <div
+                  key={person.user_id || person.id || idx}
+                  className={`bg-white rounded-2xl p-4 shadow-sm ${isAlreadyFriend ? 'cursor-pointer hover:shadow-md transition-all' : ''}`}
+                  onClick={() => {
+                    if (!isAlreadyFriend) {
+                      return;
+                    }
+                    navigate(`/friend/${friendshipId}`);
+                  }}
+                  role={isAlreadyFriend ? 'button' : undefined}
+                  tabIndex={isAlreadyFriend ? 0 : undefined}
+                  onKeyDown={(event) => {
+                    if (!isAlreadyFriend) {
+                      return;
+                    }
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      navigate(`/friend/${friendshipId}`);
+                    }
+                  }}
+                >
                   <div className="flex items-center gap-3">
                     <Avatar name={person.username || person.name || `Friend ${idx + 1}`} size="medium" />
                     <div className="flex-1">
@@ -329,17 +416,26 @@ export default function FindFriends() {
                       </div>
                     </div>
                     <button
-                      onClick={() => void handleAddFriend(person)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (isAlreadyFriend) {
+                          navigate(`/friend/${friendshipId}`);
+                          return;
+                        }
+                        void handleAddFriend(person);
+                      }}
                       disabled={isRequested || isLoading || !targetId}
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                        isRequested
+                        isAlreadyFriend
+                          ? 'bg-[#E5E7EB] text-[#374151]'
+                          : isRequested
                           ? 'bg-[#E5E7EB] text-[#6B7280]'
                           : isLoading
                             ? 'bg-[#A5B4FC] text-white'
                             : 'bg-[#4F46E5] text-white hover:bg-[#3730A3]'
                       }`}
                     >
-                      {isRequested ? 'Requested' : isLoading ? 'Sending...' : 'Add'}
+                      {isAlreadyFriend ? 'Profile' : isRequested ? 'Requested' : isLoading ? 'Sending...' : 'Add'}
                     </button>
                   </div>
                 </div>

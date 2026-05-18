@@ -2,6 +2,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 export const API_URL = import.meta.env.VITE_API_URL || 'https://soccho-gateway.onrender.com';
 export const AUTH_SCHEME = (import.meta.env.VITE_AUTH_SCHEME || 'Bearer').trim() || 'Bearer';
+const AUTO_LOGOUT_ON_AUTH_FAILURE = String(import.meta.env.VITE_AUTO_LOGOUT_ON_AUTH_FAILURE || 'false').toLowerCase() === 'true';
 
 export const ACCESS_TOKEN_KEY = 'access_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';
@@ -227,7 +228,9 @@ api.interceptors.response.use(
 
     const refreshToken = getRefreshToken();
     if (!refreshToken) {
-      redirectToLogin();
+      if (AUTO_LOGOUT_ON_AUTH_FAILURE) {
+        redirectToLogin();
+      }
       return Promise.reject(error);
     }
 
@@ -237,7 +240,9 @@ api.interceptors.response.use(
       const newAccess = await refreshAccessToken();
 
       if (!newAccess) {
-        redirectToLogin();
+        if (AUTO_LOGOUT_ON_AUTH_FAILURE) {
+          redirectToLogin();
+        }
         return Promise.reject(error);
       }
 
@@ -246,7 +251,9 @@ api.interceptors.response.use(
       originalRequest.headers.authorization = authHeader;
       return api(originalRequest);
     } catch (refreshError) {
-      redirectToLogin();
+      if (AUTO_LOGOUT_ON_AUTH_FAILURE) {
+        redirectToLogin();
+      }
       return Promise.reject(refreshError);
     }
   }

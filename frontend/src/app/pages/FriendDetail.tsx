@@ -91,6 +91,7 @@ export default function FriendDetail() {
   const netBalance = Number(ledger?.netBalance || 0);
   const pendingReceivable = Number(ledger?.pendingReceivable || 0);
   const pendingPayable = Number(ledger?.pendingPayable || 0);
+  const pendingNet = pendingReceivable - pendingPayable;
   const transactions: LedgerTx[] = (ledger?.transactions || []).map((tx) => ({
     id: String(tx.id),
     lender_id: String(tx.lenderId || ''),
@@ -188,12 +189,22 @@ export default function FriendDetail() {
           <p className={`text-4xl font-medium ${netBalance >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
             {netBalance >= 0 ? '+' : '-'}TK {Math.abs(netBalance).toLocaleString()}
           </p>
-          <p className="text-xs text-[#6B7280] mt-2">{netBalance >= 0 ? 'আপনি টাকা পাবেন' : 'আপনাকে টাকা দিতে হবে'}</p>
+          <p className="text-xs text-[#6B7280] mt-2">
+            {pendingNet > 0
+              ? 'আপনি টাকা পাবেন'
+              : pendingNet < 0
+                ? 'আপনাকে টাকা দিতে হবে'
+                : netBalance > 0
+                  ? 'আপনি টাকা পাবেন'
+                  : netBalance < 0
+                    ? 'আপনাকে টাকা দিতে হবে'
+                    : 'কোনো বকেয়া নেই'}
+          </p>
           {(pendingReceivable > 0 || pendingPayable > 0) && (
             <div className="mt-4 rounded-xl bg-[#FEF3C7] border border-[#FCD34D] p-3 text-left">
               <p className="text-xs font-medium text-[#92400E]">পেন্ডিং অনুমোদন</p>
-              {pendingReceivable > 0 && <p className="text-sm text-[#92400E] mt-1">আপনি পাবেন: TK {pendingReceivable.toLocaleString()}</p>}
-              {pendingPayable > 0 && <p className="text-sm text-[#92400E] mt-1">আপনাকে নিশ্চিত করতে হবে: TK {pendingPayable.toLocaleString()}</p>}
+              {pendingNet > 0 && <p className="text-sm text-[#92400E] mt-1">আপনি পাবেন: TK {Math.abs(pendingNet).toLocaleString()}</p>}
+              {pendingNet < 0 && <p className="text-sm text-[#92400E] mt-1">আপনাকে নিশ্চিত করতে হবে: TK {Math.abs(pendingNet).toLocaleString()}</p>}
               <p className="text-xs text-[#92400E] mt-2">পেন্ডিং ট্রানজ্যাকশন: {pendingTransactions.length}</p>
             </div>
           )}

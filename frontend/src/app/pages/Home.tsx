@@ -33,7 +33,6 @@ type FriendCard = {
   id: string;
   name: string;
   subtitle: string;
-  pendingLabel: string;
   balance: number;
   type: 'owed' | 'owe';
   pendingTotal: number;
@@ -111,17 +110,13 @@ export default function Home() {
       }
 
       const pendingTotal = Math.abs(pendingReceivable) + Math.abs(pendingPayable);
-      let pendingLabel = 'পেন্ডিং নেই';
-      if (pendingReceivable > 0 && pendingPayable > 0) {
-        pendingLabel = `পেন্ডিং: পাবেন ${pendingReceivable.toLocaleString()} টাকা, দিবেন ${pendingPayable.toLocaleString()} টাকা`;
-      } else if (pendingReceivable > 0) {
-        pendingLabel = `পেন্ডিং: আপনি পাবেন ${pendingReceivable.toLocaleString()} টাকা`;
-      } else if (pendingPayable > 0) {
-        pendingLabel = `পেন্ডিং: আপনাকে দিতে হবে ${pendingPayable.toLocaleString()} টাকা`;
-      }
-
-      let subtitle = 'কোনো নিশ্চিত বকেয়া নেই';
-      if (netBalance > 0) {
+      const pendingNet = pendingReceivable - pendingPayable;
+      let subtitle = 'কোনো বকেয়া নেই';
+      if (pendingNet > 0) {
+        subtitle = `আপনি পাবেন ${Math.abs(pendingNet).toLocaleString()} টাকা`;
+      } else if (pendingNet < 0) {
+        subtitle = `আপনাকে দিতে হবে ${Math.abs(pendingNet).toLocaleString()} টাকা`;
+      } else if (netBalance > 0) {
         subtitle = `আপনি পাবেন ${Math.abs(netBalance).toLocaleString()} টাকা`;
       } else if (netBalance < 0) {
         subtitle = `আপনাকে দিতে হবে ${Math.abs(netBalance).toLocaleString()} টাকা`;
@@ -131,7 +126,6 @@ export default function Home() {
         id: String(friend.id || ''),
         name: friend.counterpart_username || `Friend ${idx + 1}`,
         subtitle,
-        pendingLabel,
         balance: Math.abs(netBalance),
         type: netBalance >= 0 ? ('owed' as const) : ('owe' as const),
         pendingTotal,
@@ -239,17 +233,13 @@ export default function Home() {
           }
 
           const pendingTotal = Math.abs(pendingReceivable) + Math.abs(pendingPayable);
-          let pendingLabel = 'পেন্ডিং নেই';
-          if (pendingReceivable > 0 && pendingPayable > 0) {
-            pendingLabel = `পেন্ডিং: পাবেন ${pendingReceivable.toLocaleString()} টাকা, দিবেন ${pendingPayable.toLocaleString()} টাকা`;
-          } else if (pendingReceivable > 0) {
-            pendingLabel = `পেন্ডিং: আপনি পাবেন ${pendingReceivable.toLocaleString()} টাকা`;
-          } else if (pendingPayable > 0) {
-            pendingLabel = `পেন্ডিং: আপনাকে দিতে হবে ${pendingPayable.toLocaleString()} টাকা`;
-          }
-
-          let subtitle = 'কোনো নিশ্চিত বকেয়া নেই';
-          if (netBalance > 0) {
+          const pendingNet = pendingReceivable - pendingPayable;
+          let subtitle = 'কোনো বকেয়া নেই';
+          if (pendingNet > 0) {
+            subtitle = `আপনি পাবেন ${Math.abs(pendingNet).toLocaleString()} টাকা`;
+          } else if (pendingNet < 0) {
+            subtitle = `আপনাকে দিতে হবে ${Math.abs(pendingNet).toLocaleString()} টাকা`;
+          } else if (netBalance > 0) {
             subtitle = `আপনি পাবেন ${Math.abs(netBalance).toLocaleString()} টাকা`;
           } else if (netBalance < 0) {
             subtitle = `আপনাকে দিতে হবে ${Math.abs(netBalance).toLocaleString()} টাকা`;
@@ -259,7 +249,6 @@ export default function Home() {
             id: String(friend.id || ''),
             name: friend.counterpart_username || `Friend ${idx + 1}`,
             subtitle,
-            pendingLabel,
             balance: Math.abs(netBalance),
             type: netBalance >= 0 ? ('owed' as const) : ('owe' as const),
             pendingTotal,
@@ -399,7 +388,6 @@ export default function Home() {
                     <div className="flex-1">
                       <h3 className="font-medium text-[#111827]">{friend.name}</h3>
                       <p className="text-sm text-[#6B7280]">{friend.subtitle}</p>
-                      <p className="text-xs text-[#B45309] mt-1">{friend.pendingLabel}</p>
                     </div>
                     <BalanceChip amount={friend.balance} type={friend.type} />
                   </div>

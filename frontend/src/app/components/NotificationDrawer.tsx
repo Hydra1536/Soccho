@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router';
-import api, { getValidAccessToken } from '../../lib/api';
+import api, { getValidAccessToken, refreshAccessToken } from '../../lib/api';
 
 export interface NotificationItem {
   id: string;
+  dedupeKey?: string;
   type: 'pending' | 'received' | 'reminder';
   title: string;
   message: string;
@@ -121,10 +122,11 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
   const dedupeById = (items: NotificationItem[]) => {
     const seen = new Set<string>();
     return items.filter((item) => {
-      if (seen.has(item.id)) {
+      const key = item.dedupeKey || item.id;
+      if (seen.has(key)) {
         return false;
       }
-      seen.add(item.id);
+      seen.add(key);
       return true;
     });
   };
@@ -139,6 +141,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       row.type === 'lend_confirmation' ? 'pending' : row.type === 'due_reminder' ? 'reminder' : 'received';
     return {
       id: String(row.id || crypto.randomUUID()),
+      dedupeKey: row.payload?.transaction_id ? `${row.type}:${String(row.payload.transaction_id)}` : undefined,
       type: mappedType,
       title:
         row.payload?.title
@@ -210,7 +213,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     if (!isOpen) {
       return;
     }
-    const currentIds = notificationsRef.current.map((item) => item.id);
+    const currentIds = notificationsRef.current.map((item) => item.dedupeKey || item.id);
     const mergedSeen = Array.from(new Set([...seenIdsRef.current, ...currentIds]));
     seenIdsRef.current = mergedSeen;
     writeSeenNotificationIds(mergedSeen);
@@ -222,7 +225,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     if (!isOpen || notifications.length === 0) {
       return;
     }
-    const mergedSeen = Array.from(new Set([...seenIdsRef.current, ...notifications.map((item) => item.id)]));
+    const mergedSeen = Array.from(new Set([...seenIdsRef.current, ...notifications.map((item) => item.dedupeKey || item.id)]));
     seenIdsRef.current = mergedSeen;
     writeSeenNotificationIds(mergedSeen);
   }, [isOpen, notifications]);
@@ -289,15 +292,16 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
             });
             onNotificationsChange?.(dedupeById([item, ...notificationsRef.current]));
             if (!isOpenRef.current) {
-              const alreadySeen = seenIdsRef.current.includes(item.id);
+              const key = item.dedupeKey || item.id;
+              const alreadySeen = seenIdsRef.current.includes(key);
               if (alreadySeen) {
                 return;
               }
               setUnseenIds((prev) => {
-                if (prev.includes(item.id)) {
+                if (prev.includes(key)) {
                   return prev;
                 }
-                return [item.id, ...prev];
+                return [key, ...prev];
               });
             }
           }
@@ -319,6 +323,9 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
         if (wsRef.current === ws) {
           wsRef.current = null;
         }
+        if (event.code === 4401) {
+          void refreshAccessToken();
+        }
         scheduleReconnect();
       };
     };
@@ -328,7 +335,16 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     return () => {
       cancelled = true;
       clearReconnectTimer();
-      wsRef.current?.close();
+      const ws = wsRef.current;
+      if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CLOSING) {
+          ws.close(1000, 'cleanup');
+        }
+      }
       wsRef.current = null;
     };
   }, [onNotificationsChange]);
