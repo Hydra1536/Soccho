@@ -19,7 +19,14 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         self.breaker = pybreaker.CircuitBreaker(fail_max=5, reset_timeout=30)
 
     async def connect(self):
-        user_id = self._extract_user_id_from_jwt()
+        token = self._extract_token()
+        if not token:
+            await self.close(code=4401)
+            return
+
+        user_id = self._extract_user_id_from_jwt(token)
+        if not user_id:
+            user_id = await self._resolve_user_id_via_auth(token)
         if not user_id:
             await self.close(code=4401)
             return
@@ -77,21 +84,56 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     async def broadcast_notification(self, event):
         await self.send(text_data=json.dumps({'event': event['event'], 'notification': event['notification']}))
 
-    def _extract_user_id_from_jwt(self):
+    def _extract_token(self) -> str:
         raw_qs = self.scope.get('query_string', b'').decode('utf-8')
         token = parse_qs(raw_qs).get('token', [None])[0]
         if not token:
-            return None
+            return ''
         token = str(token).strip()
         if token.lower().startswith('bearer '):
             token = token.split(' ', 1)[1].strip()
+        return token
+
+    def _extract_user_id_from_jwt(self, token: str) -> str:
         if not token:
-            return None
+            return ''
         try:
-            payload = jwt.decode(token, settings.AUTH_SECRET_KEY, algorithms=['HS256'])
-            return str(payload.get('sub', ''))
+            payload = jwt.decode(
+                token,
+                settings.AUTH_SECRET_KEY,
+                algorithms=['HS256'],
+                options={'require': ['exp', 'sub']},
+            )
+            if payload.get('type') != 'access':
+                return ''
+            return str(payload.get('sub', '')).strip()
         except jwt.PyJWTError:
-            return None
+            return ''
+
+    async def _resolve_user_id_via_auth(self, token: str) -> str:
+        if not token:
+            return ''
+
+        auth_header = token if token.lower().startswith(('bearer ', 'jwt ', 'token ')) else f'Bearer {token}'
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                response = await client.get(
+                    f"{settings.AUTH_HTTP_BASE_URL}/api/auth/me/",
+                    headers={'Authorization': auth_header},
+                )
+        except httpx.RequestError:
+            return ''
+
+        if response.status_code != 200:
+            return ''
+
+        try:
+            payload = response.json()
+        except ValueError:
+            return ''
+
+        user_id = str(payload.get('id', '')).strip()
+        return user_id
 
     async def _call_transaction_action(self, action: str, notification: dict):
         payload = notification.get('payload') or {}

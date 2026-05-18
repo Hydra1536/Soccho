@@ -92,6 +92,10 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_SECRET_KEY = os.getenv('AUTH_SECRET_KEY', SECRET_KEY)
+AUTH_HTTP_BASE_URL = os.getenv(
+    'AUTH_HTTP_BASE_URL',
+    'https://soccho-auth.onrender.com',
+)
 TRANSACTION_HTTP_BASE_URL = os.getenv(
     'TRANSACTION_HTTP_BASE_URL',
     'https://soccho-transaction.onrender.com',

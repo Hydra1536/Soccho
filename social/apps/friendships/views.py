@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from apps.friendships.models import Friendship
 from apps.friendships.serializers import FriendshipActionSerializer, FriendshipSerializer
+from apps.search.models import SearchableUser
 
 
 class FriendshipCursorPagination(CursorPagination):
@@ -37,6 +38,15 @@ def _find_friendship_pair(user_a: UUID, user_b: UUID) -> Friendship | None:
     return Friendship.objects.filter(
         Q(requester_id=user_a, addressee_id=user_b) | Q(requester_id=user_b, addressee_id=user_a)
     ).first()
+
+
+def _usernames_for_ids(user_ids: set[str]) -> dict[str, str]:
+    if not user_ids:
+        return {}
+    return {
+        str(user_id): username
+        for user_id, username in SearchableUser.objects.filter(id__in=user_ids).values_list('id', 'username')
+    }
 
 
 def _idempotent_friendship_response(friendship: Friendship, requester_id: UUID, addressee_id: UUID):
@@ -174,3 +184,42 @@ class ListFriendsView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = FriendshipSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
+
+
+class ListPendingRequestsView(APIView):
+    def get(self, request):
+        user_id = _current_user_id(request)
+        if user_id is None:
+            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        incoming = list(
+            Friendship.objects.filter(
+                addressee_id=user_id,
+                status=Friendship.STATUS_PENDING,
+            ).order_by('-created_at')
+        )
+        outgoing = list(
+            Friendship.objects.filter(
+                requester_id=user_id,
+                status=Friendship.STATUS_PENDING,
+            ).order_by('-created_at')
+        )
+
+        counterpart_ids = {str(row.requester_id) for row in incoming} | {str(row.addressee_id) for row in outgoing}
+        usernames = _usernames_for_ids(counterpart_ids)
+
+        incoming_payload = []
+        for row in incoming:
+            serialized = FriendshipSerializer(row).data
+            serialized['counterpart_id'] = str(row.requester_id)
+            serialized['counterpart_username'] = usernames.get(str(row.requester_id), '')
+            incoming_payload.append(serialized)
+
+        outgoing_payload = []
+        for row in outgoing:
+            serialized = FriendshipSerializer(row).data
+            serialized['counterpart_id'] = str(row.addressee_id)
+            serialized['counterpart_username'] = usernames.get(str(row.addressee_id), '')
+            outgoing_payload.append(serialized)
+
+        return Response({'incoming': incoming_payload, 'outgoing': outgoing_payload}, status=status.HTTP_200_OK)

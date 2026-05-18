@@ -21,6 +21,15 @@ type SearchHistoryItem = {
   ts: number;
 };
 
+type PendingRequestRow = {
+  id: string;
+  requester_id: string;
+  addressee_id: string;
+  counterpart_id: string;
+  counterpart_username?: string;
+  status: string;
+};
+
 export default function FindFriends() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,6 +41,9 @@ export default function FindFriends() {
   const [searchErrorMessage, setSearchErrorMessage] = useState('');
   const [requestedUserIds, setRequestedUserIds] = useState<Record<string, boolean>>({});
   const [requestInFlight, setRequestInFlight] = useState<Record<string, boolean>>({});
+  const [incomingRequests, setIncomingRequests] = useState<PendingRequestRow[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingActionInFlight, setPendingActionInFlight] = useState<Record<string, boolean>>({});
 
   const fetchSearchResults = async (query: string) => {
     setIsSearching(true);
@@ -72,6 +84,32 @@ export default function FindFriends() {
       setSearchHistory([]);
     }
   };
+
+  const fetchPendingRequests = async () => {
+    setPendingLoading(true);
+    try {
+      const { data } = await api.get('/api/social/requests/');
+      const outgoing = Array.isArray(data?.outgoing) ? (data.outgoing as PendingRequestRow[]) : [];
+      const incoming = Array.isArray(data?.incoming) ? (data.incoming as PendingRequestRow[]) : [];
+      const outgoingMap = outgoing.reduce<Record<string, boolean>>((acc, row) => {
+        const target = String(row.counterpart_id || '').trim();
+        if (target) {
+          acc[target] = true;
+        }
+        return acc;
+      }, {});
+      setRequestedUserIds(outgoingMap);
+      setIncomingRequests(incoming);
+    } catch {
+      setIncomingRequests([]);
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchPendingRequests();
+  }, []);
 
   useEffect(() => {
     if (searchQuery.trim().length > 0) {
@@ -117,9 +155,11 @@ export default function FindFriends() {
     try {
       await api.post('/api/social/send-request/', { user_id: targetId });
       setRequestedUserIds((prev) => ({ ...prev, [targetId]: true }));
+      void fetchPendingRequests();
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 409) {
         setRequestedUserIds((prev) => ({ ...prev, [targetId]: true }));
+        void fetchPendingRequests();
       } else {
         setSearchErrorMessage(getErrorMessage(error));
       }
@@ -141,6 +181,31 @@ export default function FindFriends() {
     return 'Unable to send friend request right now.';
   };
 
+  const handleIncomingAction = async (requestRow: PendingRequestRow, action: 'accept' | 'reject') => {
+    const requesterId = String(requestRow.counterpart_id || requestRow.requester_id || '').trim();
+    if (!requesterId) {
+      return;
+    }
+
+    const requestId = String(requestRow.id || '').trim();
+    if (!requestId) {
+      return;
+    }
+
+    setPendingActionInFlight((prev) => ({ ...prev, [requestId]: true }));
+    setSearchErrorMessage('');
+    try {
+      const endpoint = action === 'accept' ? '/api/social/accept/' : '/api/social/reject/';
+      await api.post(endpoint, { user_id: requesterId });
+      setIncomingRequests((prev) => prev.filter((row) => String(row.id) !== requestId));
+      void fetchPendingRequests();
+    } catch (error) {
+      setSearchErrorMessage(getErrorMessage(error));
+    } finally {
+      setPendingActionInFlight((prev) => ({ ...prev, [requestId]: false }));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F3F4F6] pb-20">
       <div className="bg-white border-b border-[#E5E7EB] sticky top-0 z-10">
@@ -155,6 +220,51 @@ export default function FindFriends() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-6 space-y-6">
+        <div>
+          <h2 className="font-bold text-lg mb-3" style={{ fontFamily: 'var(--font-display)' }}>
+            Incoming Requests
+          </h2>
+          {pendingLoading && <p className="text-sm text-[#6B7280] mb-3">Loading requests...</p>}
+          {!pendingLoading && incomingRequests.length === 0 && <p className="text-sm text-[#6B7280] mb-3">No incoming requests.</p>}
+          <div className="space-y-3">
+            {incomingRequests.map((row, idx) => {
+              const requestId = String(row.id || '');
+              const isActing = !!pendingActionInFlight[requestId];
+              return (
+                <div key={requestId || idx} className="bg-white rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={row.counterpart_username || 'User'} size="medium" />
+                    <div className="flex-1">
+                      <h3 className="font-medium text-[#111827]">{row.counterpart_username || 'Unknown user'}</h3>
+                      <p className="text-xs text-[#6B7280]">sent you a friend request</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => void handleIncomingAction(row, 'accept')}
+                        disabled={isActing}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                          isActing ? 'bg-[#A5B4FC] text-white' : 'bg-[#10B981] text-white hover:bg-[#059669]'
+                        }`}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => void handleIncomingAction(row, 'reject')}
+                        disabled={isActing}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                          isActing ? 'bg-[#FCA5A5] text-white' : 'bg-[#EF4444] text-white hover:bg-[#DC2626]'
+                        }`}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="relative">
           <div className="relative">
             <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6B7280]" />
