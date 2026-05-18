@@ -36,6 +36,8 @@ type FriendNode = {
 type LedgerNode = {
   friendshipId: string;
   netBalance: number;
+  pendingReceivable?: number;
+  pendingPayable?: number;
   transactions: Array<{
     id: string;
     lenderId: string;
@@ -87,6 +89,8 @@ export default function FriendDetail() {
 
   const ledger = ledgerData?.friendLedger || previousLedgerData?.friendLedger;
   const netBalance = Number(ledger?.netBalance || 0);
+  const pendingReceivable = Number(ledger?.pendingReceivable || 0);
+  const pendingPayable = Number(ledger?.pendingPayable || 0);
   const transactions: LedgerTx[] = (ledger?.transactions || []).map((tx) => ({
     id: String(tx.id),
     lender_id: String(tx.lenderId || ''),
@@ -96,6 +100,8 @@ export default function FriendDetail() {
     status: tx.status,
     due_date: String(tx.dueDate || ''),
   }));
+  const pendingTransactions = transactions.filter((tx) => tx.status === 'pending');
+  const historyTransactions = transactions.filter((tx) => tx.status !== 'pending');
 
   useEffect(() => {
     if (!ledgerError) {
@@ -183,6 +189,14 @@ export default function FriendDetail() {
             {netBalance >= 0 ? '+' : '-'}TK {Math.abs(netBalance).toLocaleString()}
           </p>
           <p className="text-xs text-[#6B7280] mt-2">{netBalance >= 0 ? 'They owe you' : 'You owe them'}</p>
+          {(pendingReceivable > 0 || pendingPayable > 0) && (
+            <div className="mt-4 rounded-xl bg-[#FEF3C7] border border-[#FCD34D] p-3 text-left">
+              <p className="text-xs font-medium text-[#92400E]">Pending approvals</p>
+              {pendingReceivable > 0 && <p className="text-sm text-[#92400E] mt-1">You will receive: TK {pendingReceivable.toLocaleString()}</p>}
+              {pendingPayable > 0 && <p className="text-sm text-[#92400E] mt-1">You need to approve: TK {pendingPayable.toLocaleString()}</p>}
+              <p className="text-xs text-[#92400E] mt-2">Pending transactions: {pendingTransactions.length}</p>
+            </div>
+          )}
           <button
             onClick={() => void handleUnfriend()}
             disabled={!friendUserId || unfriendLoading}
@@ -231,7 +245,7 @@ export default function FriendDetail() {
             Transaction History
           </h3>
           <div className="space-y-3">
-            {transactions.map((transaction, index) => {
+            {historyTransactions.map((transaction, index) => {
               const isGave = transaction.lender_id === myId;
               return (
                 <motion.div
@@ -260,6 +274,11 @@ export default function FriendDetail() {
                 </motion.div>
               );
             })}
+            {historyTransactions.length === 0 && (
+              <div className="bg-white rounded-2xl p-4 shadow-sm">
+                <p className="text-sm text-[#6B7280]">No confirmed or denied transactions yet.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

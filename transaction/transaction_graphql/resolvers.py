@@ -20,6 +20,8 @@ class LedgerEntryType(graphene.ObjectType):
 class FriendLedgerType(graphene.ObjectType):
     friendship_id = graphene.UUID()
     net_balance = graphene.Float()
+    pending_receivable = graphene.Float()
+    pending_payable = graphene.Float()
     transactions = graphene.List(LedgerEntryType)
 
 
@@ -60,10 +62,21 @@ def resolve_friend_ledger(_root, info, friendship_id):
         .order_by('-created_at')
     )
     bal = Balance.objects.filter(friendship_id=friendship_id).first()
+    pending_receivable = Decimal('0')
+    pending_payable = Decimal('0')
+    for tx in txs:
+        if tx.status != Transaction.STATUS_PENDING:
+            continue
+        if str(tx.lender_id) == requester_id:
+            pending_receivable += Decimal(tx.amount)
+        elif str(tx.borrower_id) == requester_id:
+            pending_payable += Decimal(tx.amount)
 
     return FriendLedgerType(
         friendship_id=friendship_id,
         net_balance=float(bal.net_balance) if bal else 0.0,
+        pending_receivable=float(pending_receivable),
+        pending_payable=float(pending_payable),
         transactions=[
             LedgerEntryType(
                 id=t.id,

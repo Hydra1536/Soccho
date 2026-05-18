@@ -16,7 +16,7 @@ from apps.search.models import SearchableUser
 
 
 class FriendshipCursorPagination(CursorPagination):
-    page_size = 10
+    page_size = 5
     ordering = '-created_at'
 
 
@@ -228,7 +228,25 @@ class ListFriendsView(APIView):
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = FriendshipSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        payload = serializer.data
+
+        counterpart_ids = set()
+        for row in payload:
+            requester_id = str(row.get('requester_id', ''))
+            addressee_id = str(row.get('addressee_id', ''))
+            counterpart_ids.add(addressee_id if requester_id == str(user_id) else requester_id)
+
+        usernames = _usernames_for_ids(counterpart_ids)
+        enriched = []
+        for row in payload:
+            requester_id = str(row.get('requester_id', ''))
+            addressee_id = str(row.get('addressee_id', ''))
+            counterpart_id = addressee_id if requester_id == str(user_id) else requester_id
+            row['counterpart_id'] = counterpart_id
+            row['counterpart_username'] = usernames.get(counterpart_id, '')
+            enriched.append(row)
+
+        return paginator.get_paginated_response(enriched)
 
 
 class ListPendingRequestsView(APIView):

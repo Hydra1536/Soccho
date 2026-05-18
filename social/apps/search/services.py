@@ -5,6 +5,7 @@ from typing import Any
 import redis
 from django.contrib.postgres.search import TrigramSimilarity
 from django.db import DatabaseError
+from django.db.models import Q
 
 from django.conf import settings
 
@@ -64,35 +65,40 @@ def get_loyalty_score(user_id: str) -> float:
         client = None
 
     try:
-        active = SearchableTransaction.objects.filter(is_deleted=False)
-        borrower_all = list(active.filter(borrower_id=user_id).only('status', 'due_date', 'updated_at'))
+        involved = list(
+            SearchableTransaction.objects.filter(is_deleted=False)
+            .filter(Q(lender_id=user_id) | Q(borrower_id=user_id))
+        )
     except DatabaseError:
         return 0.0
 
-    total_borrow_transactions = len(borrower_all)
-    confirmed_borrow = [row for row in borrower_all if row.status == SearchableTransaction.STATUS_CONFIRMED]
-    confirmed_borrow_count = len(confirmed_borrow)
+    total_transactions = len(involved)
+    if total_transactions == 0:
+        return 0.0
 
-    repayments_due = [row for row in confirmed_borrow if row.due_date is not None]
-    on_time_count = sum(
-        1
-        for row in repayments_due
-        if row.updated_at is not None and row.updated_at.date() <= row.due_date
-    )
+    confirmed = [row for row in involved if row.status == SearchableTransaction.STATUS_CONFIRMED]
+    confirmed_count = len(confirmed)
+    completion_rate = confirmed_count / total_transactions
 
-    total_confirmed_transactions = active.filter(status=SearchableTransaction.STATUS_CONFIRMED).count()
+    # Borrow-side on-time behavior is the strongest trust signal.
+    borrow_confirmed = [row for row in confirmed if str(row.borrower_id) == str(user_id)]
+    if borrow_confirmed:
+        on_time_hits = 0
+        for row in borrow_confirmed:
+            if row.due_date is None:
+                on_time_hits += 1
+                continue
+            if row.updated_at is not None and row.updated_at.date() <= row.due_date:
+                on_time_hits += 1
+        on_time_rate = on_time_hits / len(borrow_confirmed)
+    else:
+        on_time_rate = 0.0
 
-    on_time_repayment_rate = (on_time_count / len(repayments_due)) if repayments_due else 0.0
-    repayment_completion_rate = (
-        confirmed_borrow_count / total_borrow_transactions
-        if total_borrow_transactions > 0
-        else 0.0
-    )
-    transaction_consistency = min(1.0, total_confirmed_transactions / 20.0)
+    transaction_consistency = min(1.0, confirmed_count / 20.0)
 
     score = 100.0 * (
-        0.60 * on_time_repayment_rate
-        + 0.25 * repayment_completion_rate
+        0.50 * completion_rate
+        + 0.35 * on_time_rate
         + 0.15 * transaction_consistency
     )
     score = max(0.0, min(100.0, score))

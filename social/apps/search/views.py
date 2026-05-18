@@ -49,6 +49,7 @@ class UserSearchView(APIView):
             }
             for user in matches
         ]
+        payload.sort(key=lambda row: (-(row.get('loyalty_score') or 0), str(row.get('username') or '').lower()))
         return Response({'results': payload})
 
 

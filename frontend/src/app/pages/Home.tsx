@@ -3,7 +3,8 @@ import { Bell, Calculator } from 'lucide-react';
 import { Link } from 'react-router';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, ResponsiveContainer } from 'recharts';
 import { useApolloClient, useQuery } from '@apollo/client';
-import { GET_DASHBOARD_SUMMARY, GET_FRIEND_LEDGER, GET_FRIENDS } from '../../graphql/queries';
+import { GET_DASHBOARD_SUMMARY, GET_FRIEND_LEDGER } from '../../graphql/queries';
+import api from '../../lib/api';
 import { toDeterministicFriendshipUuid } from '../../lib/friendshipKey';
 import { Avatar } from '../components/Avatar';
 import { BalanceChip } from '../components/BalanceChip';
@@ -18,23 +19,24 @@ type DashboardSummaryNode = {
   totalConfirmed: number;
 };
 
-type FriendNode = {
-  friendshipId: string;
-  requesterId: string;
-  addresseeId: string;
+type FriendApiRow = {
+  id: string;
+  requester_id: string;
+  addressee_id: string;
   status: string;
-  createdAt: string;
-  userId: string;
-  username: string;
-  loyaltyScore?: number | null;
+  created_at: string;
+  counterpart_id: string;
+  counterpart_username: string;
 };
 
 type FriendCard = {
   id: string;
   name: string;
-  lastTransaction: string;
+  subtitle: string;
+  pendingLabel: string;
   balance: number;
   type: 'owed' | 'owe';
+  pendingTotal: number;
 };
 
 export default function Home() {
@@ -44,6 +46,9 @@ export default function Home() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [friendCards, setFriendCards] = useState<FriendCard[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(false);
+  const [friendsLoadingMore, setFriendsLoadingMore] = useState(false);
+  const [nextFriendsCursor, setNextFriendsCursor] = useState<string | null>(null);
   const [friendsErrorMessage, setFriendsErrorMessage] = useState('');
 
   const userId = localStorage.getItem('user_id') || '';
@@ -62,74 +67,237 @@ export default function Home() {
     notifyOnNetworkStatusChange: true,
   });
 
-  const {
-    data: friendsData,
-    previousData: previousFriendsData,
-    loading: friendsLoading,
-    error: friendsError,
-  } = useQuery<{ friendList: FriendNode[] }>(GET_FRIENDS, {
-    skip: !userId,
-    context: { service: 'social' },
-    errorPolicy: 'all',
-    returnPartialData: true,
-    notifyOnNetworkStatusChange: true,
-  });
-
   const summary = summaryData?.dashboardSummary || previousSummaryData?.dashboardSummary || null;
-  const friends = friendsData?.friendList || previousFriendsData?.friendList || [];
   const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
 
   useEffect(() => {
     let cancelled = false;
 
-    const buildFriendCards = async () => {
-      if (!friends.length) {
-        setFriendCards([]);
-        setFriendsErrorMessage(friendsError ? 'Unable to load friends right now.' : '');
-        return;
+    const extractCursor = (nextUrl: string | null): string | null => {
+      if (!nextUrl) {
+        return null;
       }
-
-      const cards = await Promise.all(
-        friends.map(async (friend, idx) => {
-          let netBalance = 0;
-
-          try {
-            const { data } = await apolloClient.query({
-              query: GET_FRIEND_LEDGER,
-              variables: { friendshipId: toDeterministicFriendshipUuid(String(friend.friendshipId || '')) },
-              context: { service: 'transaction' },
-              fetchPolicy: 'network-only',
-            });
-            netBalance = Number(data?.friendLedger?.netBalance || 0);
-          } catch {
-            const cached = apolloClient.readQuery({
-              query: GET_FRIEND_LEDGER,
-              variables: { friendshipId: toDeterministicFriendshipUuid(String(friend.friendshipId || '')) },
-            }) as { friendLedger?: { netBalance?: number } } | null;
-            netBalance = Number(cached?.friendLedger?.netBalance || 0);
-          }
-
-          return {
-            id: friend.friendshipId,
-            name: friend.username || `Friend ${idx + 1}`,
-            lastTransaction: friend.status,
-            balance: Math.abs(netBalance),
-            type: netBalance >= 0 ? ('owed' as const) : ('owe' as const),
-          };
-        })
-      );
-
-      if (!cancelled) {
-        setFriendCards(cards);
-        setFriendsErrorMessage(friendsError ? 'Showing cached friends data.' : '');
+      try {
+        const parsed = nextUrl.startsWith('http') ? new URL(nextUrl) : new URL(nextUrl, window.location.origin);
+        return parsed.searchParams.get('cursor');
+      } catch {
+        return null;
       }
     };
 
-    void buildFriendCards();
+    const buildCard = async (friend: FriendApiRow, idx: number): Promise<FriendCard> => {
+      let netBalance = 0;
+      let pendingReceivable = 0;
+      let pendingPayable = 0;
+
+      try {
+        const { data } = await apolloClient.query({
+          query: GET_FRIEND_LEDGER,
+          variables: { friendshipId: toDeterministicFriendshipUuid(String(friend.id || '')) },
+          context: { service: 'transaction' },
+          fetchPolicy: 'network-only',
+        });
+        netBalance = Number(data?.friendLedger?.netBalance || 0);
+        pendingReceivable = Number(data?.friendLedger?.pendingReceivable || 0);
+        pendingPayable = Number(data?.friendLedger?.pendingPayable || 0);
+      } catch {
+        const cached = apolloClient.readQuery({
+          query: GET_FRIEND_LEDGER,
+          variables: { friendshipId: toDeterministicFriendshipUuid(String(friend.id || '')) },
+        }) as { friendLedger?: { netBalance?: number; pendingReceivable?: number; pendingPayable?: number } } | null;
+        netBalance = Number(cached?.friendLedger?.netBalance || 0);
+        pendingReceivable = Number(cached?.friendLedger?.pendingReceivable || 0);
+        pendingPayable = Number(cached?.friendLedger?.pendingPayable || 0);
+      }
+
+      const pendingTotal = Math.abs(pendingReceivable) + Math.abs(pendingPayable);
+      let pendingLabel = 'No pending approvals';
+      if (pendingReceivable > 0 && pendingPayable > 0) {
+        pendingLabel = `Pending: receive ৳${pendingReceivable.toLocaleString()} • pay ৳${pendingPayable.toLocaleString()}`;
+      } else if (pendingReceivable > 0) {
+        pendingLabel = `Pending to receive: ৳${pendingReceivable.toLocaleString()}`;
+      } else if (pendingPayable > 0) {
+        pendingLabel = `Pending to pay: ৳${pendingPayable.toLocaleString()}`;
+      }
+
+      let subtitle = 'No confirmed dues';
+      if (netBalance > 0) {
+        subtitle = 'Owes you';
+      } else if (netBalance < 0) {
+        subtitle = 'You owe';
+      }
+
+      return {
+        id: String(friend.id || ''),
+        name: friend.counterpart_username || `Friend ${idx + 1}`,
+        subtitle,
+        pendingLabel,
+        balance: Math.abs(netBalance),
+        type: netBalance >= 0 ? ('owed' as const) : ('owe' as const),
+        pendingTotal,
+      };
+    };
+
+    const sortCards = (rows: FriendCard[]) =>
+      [...rows].sort((a, b) => {
+        if (b.pendingTotal !== a.pendingTotal) {
+          return b.pendingTotal - a.pendingTotal;
+        }
+        if (b.balance !== a.balance) {
+          return b.balance - a.balance;
+        }
+        return a.name.localeCompare(b.name);
+      });
+
+    const fetchFriendPage = async (cursor: string | null, append: boolean) => {
+      if (!userId) {
+        return;
+      }
+      if (append) {
+        setFriendsLoadingMore(true);
+      } else {
+        setFriendsLoading(true);
+      }
+      setFriendsErrorMessage('');
+
+      try {
+        const params = cursor ? { cursor } : {};
+        const { data } = await api.get('/api/social/list/', { params });
+        const rows = Array.isArray(data?.results) ? (data.results as FriendApiRow[]) : [];
+        const built = await Promise.all(rows.map((row, idx) => buildCard(row, idx)));
+        if (cancelled) {
+          return;
+        }
+        setFriendCards((prev) => {
+          if (!append) {
+            return sortCards(built);
+          }
+          const byId = new Map<string, FriendCard>();
+          prev.forEach((item) => byId.set(item.id, item));
+          built.forEach((item) => byId.set(item.id, item));
+          return sortCards(Array.from(byId.values()));
+        });
+        setNextFriendsCursor(extractCursor(data?.next || null));
+      } catch {
+        if (!cancelled && !append) {
+          setFriendCards([]);
+        }
+        if (!cancelled) {
+          setFriendsErrorMessage('Unable to load friends right now.');
+          setNextFriendsCursor(null);
+        }
+      } finally {
+        if (!cancelled) {
+          if (append) {
+            setFriendsLoadingMore(false);
+          } else {
+            setFriendsLoading(false);
+          }
+        }
+      }
+    };
+
+    void fetchFriendPage(null, false);
     return () => {
       cancelled = true;
     };
-  }, [apolloClient, friends, friendsError]);
+  }, [apolloClient, userId]);
+
+  const handleLoadMoreFriends = async () => {
+    if (!nextFriendsCursor || friendsLoadingMore) {
+      return;
+    }
+
+    setFriendsLoadingMore(true);
+    try {
+      const { data } = await api.get('/api/social/list/', { params: { cursor: nextFriendsCursor } });
+      const rows = Array.isArray(data?.results) ? (data.results as FriendApiRow[]) : [];
+      const built = await Promise.all(
+        rows.map(async (friend, idx) => {
+          let netBalance = 0;
+          let pendingReceivable = 0;
+          let pendingPayable = 0;
+
+          try {
+            const { data: ledgerData } = await apolloClient.query({
+              query: GET_FRIEND_LEDGER,
+              variables: { friendshipId: toDeterministicFriendshipUuid(String(friend.id || '')) },
+              context: { service: 'transaction' },
+              fetchPolicy: 'network-only',
+            });
+            netBalance = Number(ledgerData?.friendLedger?.netBalance || 0);
+            pendingReceivable = Number(ledgerData?.friendLedger?.pendingReceivable || 0);
+            pendingPayable = Number(ledgerData?.friendLedger?.pendingPayable || 0);
+          } catch {
+            const cached = apolloClient.readQuery({
+              query: GET_FRIEND_LEDGER,
+              variables: { friendshipId: toDeterministicFriendshipUuid(String(friend.id || '')) },
+            }) as { friendLedger?: { netBalance?: number; pendingReceivable?: number; pendingPayable?: number } } | null;
+            netBalance = Number(cached?.friendLedger?.netBalance || 0);
+            pendingReceivable = Number(cached?.friendLedger?.pendingReceivable || 0);
+            pendingPayable = Number(cached?.friendLedger?.pendingPayable || 0);
+          }
+
+          const pendingTotal = Math.abs(pendingReceivable) + Math.abs(pendingPayable);
+          let pendingLabel = 'No pending approvals';
+          if (pendingReceivable > 0 && pendingPayable > 0) {
+            pendingLabel = `Pending: receive ৳${pendingReceivable.toLocaleString()} • pay ৳${pendingPayable.toLocaleString()}`;
+          } else if (pendingReceivable > 0) {
+            pendingLabel = `Pending to receive: ৳${pendingReceivable.toLocaleString()}`;
+          } else if (pendingPayable > 0) {
+            pendingLabel = `Pending to pay: ৳${pendingPayable.toLocaleString()}`;
+          }
+
+          let subtitle = 'No confirmed dues';
+          if (netBalance > 0) {
+            subtitle = 'Owes you';
+          } else if (netBalance < 0) {
+            subtitle = 'You owe';
+          }
+
+          return {
+            id: String(friend.id || ''),
+            name: friend.counterpart_username || `Friend ${idx + 1}`,
+            subtitle,
+            pendingLabel,
+            balance: Math.abs(netBalance),
+            type: netBalance >= 0 ? ('owed' as const) : ('owe' as const),
+            pendingTotal,
+          } satisfies FriendCard;
+        })
+      );
+
+      setFriendCards((prev) => {
+        const byId = new Map<string, FriendCard>();
+        prev.forEach((item) => byId.set(item.id, item));
+        built.forEach((item) => byId.set(item.id, item));
+        return Array.from(byId.values()).sort((a, b) => {
+          if (b.pendingTotal !== a.pendingTotal) {
+            return b.pendingTotal - a.pendingTotal;
+          }
+          if (b.balance !== a.balance) {
+            return b.balance - a.balance;
+          }
+          return a.name.localeCompare(b.name);
+        });
+      });
+      const nextUrl = data?.next || null;
+      if (!nextUrl) {
+        setNextFriendsCursor(null);
+      } else {
+        try {
+          const parsed = nextUrl.startsWith('http') ? new URL(nextUrl) : new URL(nextUrl, window.location.origin);
+          setNextFriendsCursor(parsed.searchParams.get('cursor'));
+        } catch {
+          setNextFriendsCursor(null);
+        }
+      }
+    } catch {
+      setFriendsErrorMessage('Unable to load more friends right now.');
+    } finally {
+      setFriendsLoadingMore(false);
+    }
+  };
 
   const pieData = useMemo(
     () => [
@@ -222,7 +390,6 @@ export default function Home() {
           {friendsLoading && friendCards.length === 0 && <p className="text-sm text-[#6B7280] mb-3">Loading friends...</p>}
           {friendsErrorMessage && <p className="text-sm text-[#B45309] mb-3">{friendsErrorMessage}</p>}
           {isOffline && friendCards.length > 0 && <p className="text-xs text-[#6B7280] mb-3">Offline mode: showing cached data.</p>}
-          {friendsError && friendCards.length === 0 && <p className="text-sm text-[#DC2626] mb-3">Unable to load friends right now.</p>}
           <div className="space-y-3">
             {friendCards.map((friend) => (
               <Link key={friend.id} to={`/friend/${friend.id}`} className="block">
@@ -231,7 +398,8 @@ export default function Home() {
                     <Avatar name={friend.name} size="medium" />
                     <div className="flex-1">
                       <h3 className="font-medium text-[#111827]">{friend.name}</h3>
-                      <p className="text-sm text-[#6B7280]">{friend.lastTransaction}</p>
+                      <p className="text-sm text-[#6B7280]">{friend.subtitle}</p>
+                      <p className="text-xs text-[#B45309] mt-1">{friend.pendingLabel}</p>
                     </div>
                     <BalanceChip amount={friend.balance} type={friend.type} />
                   </div>
@@ -239,6 +407,17 @@ export default function Home() {
               </Link>
             ))}
           </div>
+          {!!nextFriendsCursor && (
+            <button
+              onClick={() => void handleLoadMoreFriends()}
+              disabled={friendsLoadingMore}
+              className={`mt-3 w-full h-10 rounded-xl text-sm font-medium transition-colors ${
+                friendsLoadingMore ? 'bg-[#E5E7EB] text-[#6B7280]' : 'bg-[#111827] text-white hover:bg-black'
+              }`}
+            >
+              {friendsLoadingMore ? 'Loading...' : 'Load 5 more'}
+            </button>
+          )}
         </div>
       </div>
 

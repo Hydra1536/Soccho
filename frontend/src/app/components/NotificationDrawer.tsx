@@ -30,12 +30,28 @@ function toWsUrl(httpUrl: string): string {
   return `${scheme}//${url.host}`;
 }
 
+function formatTimestamp(timestamp: string): string {
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) {
+    return timestamp;
+  }
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed);
+}
+
 type ApiNotificationRow = {
   id: string | number;
   type: string;
   payload?: {
     title?: string;
     body?: string;
+    amount?: string;
+    transaction_id?: string;
   };
   created_at?: string;
 };
@@ -116,13 +132,32 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
   const toNotificationItem = (row: ApiNotificationRow): NotificationItem => {
     const isFriendRequest = row.type === 'friend_request';
     const isFriendAccepted = row.type === 'friend_accepted';
+    const isPaymentAck = row.type === 'payment_ack';
+    const isLendConfirmation = row.type === 'lend_confirmation';
+    const amount = row.payload?.amount ? `৳${row.payload.amount}` : '';
     const mappedType: NotificationItem['type'] =
       row.type === 'lend_confirmation' ? 'pending' : row.type === 'due_reminder' ? 'reminder' : 'received';
     return {
       id: String(row.id || crypto.randomUUID()),
       type: mappedType,
-      title: row.payload?.title || (isFriendRequest ? 'New friend request' : isFriendAccepted ? 'Friend request accepted' : 'Notification'),
-      message: row.payload?.body || 'You have a new notification.',
+      title:
+        row.payload?.title
+        || (isFriendRequest
+          ? 'New friend request'
+          : isFriendAccepted
+            ? 'Friend request accepted'
+            : isLendConfirmation
+              ? 'Payment confirmation needed'
+              : isPaymentAck
+                ? 'Payment confirmed'
+                : 'Notification'),
+      message:
+        row.payload?.body
+        || (isLendConfirmation
+          ? `${amount} payment is waiting for your approval.`
+          : isPaymentAck
+            ? `${amount} payment was confirmed.`
+            : 'You have a new notification.'),
       timestamp: row.created_at || new Date().toISOString(),
       route: isFriendRequest || isFriendAccepted ? '/friends' : undefined,
     };
@@ -234,6 +269,10 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       ws.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
+          if (payload?.event === 'notification.cleared' && payload?.notification_id) {
+            onNotificationsChange?.(notificationsRef.current.filter((item) => item.id !== String(payload.notification_id)));
+            return;
+          }
           if (
             payload?.event === 'transaction.created'
             || payload?.event === 'notification.push'
@@ -242,20 +281,12 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
             || payload?.event === 'friend.accepted'
           ) {
             const row = payload.notification || {};
-            const item: NotificationItem = {
-              id: String(row.id || crypto.randomUUID()),
-              type: payload?.event === 'transaction.created' ? 'pending' : row.type === 'due_reminder' ? 'reminder' : 'received',
-              title: row.payload?.title || payload?.event || 'Notification',
-              message: row.payload?.body || 'You have a new notification.',
-              timestamp: row.created_at || new Date().toISOString(),
-              route:
-                payload?.event === 'friend.request'
-                || payload?.event === 'friend.accepted'
-                || row.type === 'friend_request'
-                || row.type === 'friend_accepted'
-                  ? '/friends'
-                  : undefined,
-            };
+            const item = toNotificationItem({
+              id: row.id,
+              type: row.type || payload?.event || '',
+              payload: row.payload || {},
+              created_at: row.created_at,
+            });
             onNotificationsChange?.(dedupeById([item, ...notificationsRef.current]));
             if (!isOpenRef.current) {
               const alreadySeen = seenIdsRef.current.includes(item.id);
@@ -276,12 +307,15 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       };
 
       ws.onerror = () => {
-        console.warn('Notification websocket error');
-        scheduleReconnect();
+        if (import.meta.env.DEV) {
+          console.warn('Notification websocket error');
+        }
       };
 
       ws.onclose = (event) => {
-        console.warn('Notification websocket closed', { code: event.code, reason: event.reason });
+        if (import.meta.env.DEV) {
+          console.warn('Notification websocket closed', { code: event.code, reason: event.reason });
+        }
         if (wsRef.current === ws) {
           wsRef.current = null;
         }
@@ -404,7 +438,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
                     <div className="flex-1">
                       <h3 className="font-medium text-sm text-[#111827] mb-1">{notification.title}</h3>
                       <p className="text-sm text-[#6B7280] mb-2">{notification.message}</p>
-                      <p className="text-xs text-[#9CA3AF]">{notification.timestamp}</p>
+                      <p className="text-xs text-[#9CA3AF]">{formatTimestamp(notification.timestamp)}</p>
 
                       {notification.type === 'pending' && (
                         <div className="flex gap-2 mt-3">

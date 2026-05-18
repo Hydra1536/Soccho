@@ -1,11 +1,13 @@
 import asyncio
 import json
 import time
+from datetime import timedelta
 
 import redis.asyncio as redis
 from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
 from django.conf import settings
+from django.utils import timezone
 
 from apps.notifications.models import Notification
 from apps.notifications.retention import cleanup_expired_notifications
@@ -29,6 +31,24 @@ def _map_event_to_notification(channel: str, payload: dict):
 
 @sync_to_async
 def _persist_notification(recipient_id: str, ntype: str, payload: dict):
+    transaction_id = str(payload.get('transaction_id', '')).strip()
+    if transaction_id:
+        existing = Notification.objects.filter(
+            recipient_id=recipient_id,
+            type=ntype,
+            payload__transaction_id=transaction_id,
+            created_at__gte=timezone.now() - timedelta(hours=24),
+        ).first()
+        if existing is not None:
+            return {
+                'id': existing.id,
+                'recipient_id': str(existing.recipient_id),
+                'type': existing.type,
+                'payload': existing.payload,
+                'is_cleared': existing.is_cleared,
+                'created_at': existing.created_at.isoformat(),
+            }
+
     row = Notification.objects.create(
         recipient_id=recipient_id,
         type=ntype,

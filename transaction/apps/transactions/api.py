@@ -54,6 +54,8 @@ def create_transaction(request: HttpRequest, payload: TransactionCreateIn):
         'borrower_id': str(tx.borrower_id),
         'amount': str(tx.amount),
         'due_date': str(tx.due_date),
+        'title': 'Payment confirmation needed',
+        'body': f"A payment request of ৳{tx.amount} needs your approval.",
     })
     return 201, tx
 
@@ -86,6 +88,9 @@ def confirm_transaction(request: HttpRequest, transaction_id: str, payload: Conf
         'friendship_id': str(tx.friendship_id),
         'new_version': balance.version,
         'net_balance': str(balance.net_balance),
+        'amount': str(tx.amount),
+        'title': 'Payment confirmed',
+        'body': f'Payment of ৳{tx.amount} was confirmed.',
     })
     return 200, tx
 
@@ -120,6 +125,9 @@ def resolve_transaction(request: HttpRequest, transaction_id: str, payload: Reso
                 'net_balance': str(balance.net_balance),
                 'borrower_id': str(tx.borrower_id),
                 'lender_id': str(tx.lender_id),
+                'amount': str(tx.amount),
+                'title': 'Payment confirmed',
+                'body': f'Payment of ৳{tx.amount} was confirmed.',
             })
             return 200, tx
 

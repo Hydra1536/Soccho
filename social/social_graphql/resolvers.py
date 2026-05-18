@@ -33,8 +33,6 @@ class FriendListQuery(graphene.ObjectType):
             str(user_id_value): username
             for user_id_value, username in SearchableUser.objects.filter(id__in=friend_ids).values_list('id', 'username')
         }
-        loyalty_score = get_loyalty_score(user_id)
-
         rows = []
         for edge in queryset:
             friend_id = edge.addressee_id if str(edge.requester_id) == user_id else edge.requester_id
@@ -48,7 +46,7 @@ class FriendListQuery(graphene.ObjectType):
                     created_at=edge.created_at.isoformat(),
                     user_id=friend_id,
                     username=username,
-                    loyalty_score=loyalty_score,
+                    loyalty_score=get_loyalty_score(str(friend_id)),
                 )
             )
         return rows

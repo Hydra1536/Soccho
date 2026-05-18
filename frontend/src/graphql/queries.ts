@@ -31,6 +31,8 @@ export const GET_FRIEND_LEDGER = gql`
     friendLedger(friendshipId: $friendshipId) {
       friendshipId
       netBalance
+      pendingReceivable
+      pendingPayable
       transactions {
         id
         lenderId
