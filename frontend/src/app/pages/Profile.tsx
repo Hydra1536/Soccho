@@ -12,7 +12,7 @@ export default function Profile() {
   const [userEmail, setUserEmail] = useState(localStorage.getItem(EMAIL_KEY) || '');
   const [profileError, setProfileError] = useState('');
   const [canChangePassword, setCanChangePassword] = useState(false);
-  const [loyaltyScore, setLoyaltyScore] = useState<number | null>(null);
+  const [loyaltyScore, setLoyaltyScore] = useState<number>(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -50,7 +50,7 @@ export default function Profile() {
         if (!isMounted) {
           return;
         }
-        setLoyaltyScore(null);
+        setLoyaltyScore(0);
       }
     };
 
@@ -89,15 +89,13 @@ export default function Profile() {
             {userName || 'Loading profile...'}
           </h2>
           <p className="text-sm text-[#6B7280]">{userEmail || 'Fetching your account details...'}</p>
-          {loyaltyScore !== null && (
-            <div className="mt-4">
-              <p className="text-xs text-[#6B7280] mb-1">Loyalty Score</p>
-              <div className="h-2 rounded-full bg-[#E5E7EB] overflow-hidden">
-                <div className="h-full bg-[#4F46E5] rounded-full transition-all" style={{ width: `${loyaltyScore}%` }} />
-              </div>
-              <p className="text-sm text-[#111827] mt-2 font-medium">{loyaltyScore.toFixed(1)} / 100</p>
+          <div className="mt-4">
+            <p className="text-xs text-[#6B7280] mb-1">Loyalty Score</p>
+            <div className="h-2 rounded-full bg-[#E5E7EB] overflow-hidden">
+              <div className="h-full bg-[#4F46E5] rounded-full transition-all" style={{ width: `${loyaltyScore}%` }} />
             </div>
-          )}
+            <p className="text-sm text-[#111827] mt-2 font-medium">{loyaltyScore.toFixed(1)} / 100</p>
+          </div>
           {profileError && <p className="mt-3 text-sm text-[#EF4444]">{profileError}</p>}
         </div>
 

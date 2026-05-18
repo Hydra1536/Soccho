@@ -4,7 +4,7 @@ from django.utils import timezone
 
 from apps.notifications.models import Notification
 
-RETENTION_DAYS = 7
+RETENTION_DAYS = 1
 
 
 def retention_cutoff():

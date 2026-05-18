@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, ResponsiveContainer } from 'recharts';
 import { useApolloClient, useQuery } from '@apollo/client';
 import { GET_DASHBOARD_SUMMARY, GET_FRIEND_LEDGER } from '../../graphql/queries';
-import api from '../../lib/api';
+import api, { getAccessToken } from '../../lib/api';
 import { toDeterministicFriendshipUuid } from '../../lib/friendshipKey';
 import { Avatar } from '../components/Avatar';
 import { BalanceChip } from '../components/BalanceChip';
@@ -50,7 +50,28 @@ export default function Home() {
   const [nextFriendsCursor, setNextFriendsCursor] = useState<string | null>(null);
   const [friendsErrorMessage, setFriendsErrorMessage] = useState('');
 
-  const userId = localStorage.getItem('user_id') || '';
+  const resolvedUserId = useMemo(() => {
+    const local = (localStorage.getItem('user_id') || '').trim();
+    if (local) {
+      return local;
+    }
+    const token = getAccessToken();
+    if (!token) {
+      return '';
+    }
+    try {
+      const [, payload] = token.split('.');
+      if (!payload) {
+        return '';
+      }
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+      const parsed = JSON.parse(atob(padded)) as { sub?: string };
+      return String(parsed?.sub || '').trim();
+    } catch {
+      return '';
+    }
+  }, []);
 
   const {
     data: summaryData,
@@ -58,8 +79,8 @@ export default function Home() {
     loading: summaryLoading,
     error: summaryError,
   } = useQuery<{ dashboardSummary: DashboardSummaryNode }>(GET_DASHBOARD_SUMMARY, {
-    variables: { userId },
-    skip: !userId,
+    variables: { userId: resolvedUserId },
+    skip: !resolvedUserId,
     context: { service: 'transaction' },
     errorPolicy: 'all',
     returnPartialData: true,
@@ -144,7 +165,7 @@ export default function Home() {
       });
 
     const fetchFriendPage = async (cursor: string | null, append: boolean) => {
-      if (!userId) {
+      if (!resolvedUserId) {
         return;
       }
       if (append) {
@@ -195,7 +216,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [apolloClient, userId]);
+  }, [apolloClient, resolvedUserId]);
 
   const handleLoadMoreFriends = async () => {
     if (!nextFriendsCursor || friendsLoadingMore) {
@@ -368,6 +389,20 @@ export default function Home() {
                 </BarChart>
               </ResponsiveContainer>
               <p className="text-center text-xs text-[#6B7280] mt-2">Monthly Trend</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 text-center">
+              <p className="text-xs text-[#6B7280]">Given</p>
+              <p className="text-sm font-semibold text-[#111827]">TK {Number(summary?.totalLent || 0).toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 text-center">
+              <p className="text-xs text-[#6B7280]">Received</p>
+              <p className="text-sm font-semibold text-[#111827]">TK {Number(summary?.totalBorrowed || 0).toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 text-center">
+              <p className="text-xs text-[#6B7280]">Confirmed</p>
+              <p className="text-sm font-semibold text-[#111827]">{Number(summary?.totalConfirmed || 0).toLocaleString()}</p>
             </div>
           </div>
         </div>
