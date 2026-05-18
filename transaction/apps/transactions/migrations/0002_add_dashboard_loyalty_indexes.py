@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='transaction',
-            index=models.Index(fields=['borrower_id', 'status', 'created_at'], name='txn_borrower_status_created_idx'),
+            index=models.Index(fields=['borrower_id', 'status', 'created_at'], name='txn_borr_sts_crtd_idx'),
         ),
     ]
