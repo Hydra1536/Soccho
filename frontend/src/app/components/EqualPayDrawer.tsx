@@ -65,8 +65,10 @@ function calculateSettlement(people: Array<{ name: string; amount: number }>) {
 }
 
 export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
-  const [count, setCount] = useState(2);
+  const [countInput, setCountInput] = useState('3');
+  const [count, setCount] = useState(3);
   const [people, setPeople] = useState<Person[]>([
+    { name: '', amount: '' },
     { name: '', amount: '' },
     { name: '', amount: '' },
   ]);
@@ -90,9 +92,10 @@ export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
     });
   };
 
-  const handleCountChange = (raw: string) => {
-    const numeric = Math.max(2, Number(raw.replace(/\D/g, '')) || 2);
+  const handleCountConfirm = () => {
+    const numeric = Math.max(2, Number(countInput.replace(/\D/g, '')) || 2);
     setCount(numeric);
+    setCountInput(String(numeric));
     ensureCount(numeric);
     setResult(null);
     setError('');
@@ -166,19 +169,31 @@ export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
 
             <div className="p-4 space-y-4">
               <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl p-3 text-sm text-[#374151]">
-                <p>Split bills or settle balances equally among people.</p>
-                <p className="mt-2">Install to home screen for offline use as a mobile app.</p>
+                <p>
+                  একসাথে ঘোরাঘুরি বা খাওয়া-দাওয়ার খরচ সমানভাবে ভাগ করা নিয়ে চিন্তিত? কে কত টাকা ফেরত
+                  পাবে বা কাকে কত দিতে হবে, তার একটি পরিষ্কার তালিকা পেতে সবার নাম এবং কে কত খরচ করেছে তা
+                  যোগ করুন।
+                </p>
+                <p className="mt-2">আড্ডা হবে প্রাণখুলে, আর হিসাব হবে EqualPay-তে!✨</p>
               </div>
 
               <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
                 <label className="block text-sm text-[#111827] mb-2 font-medium">Number of People</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={count}
-                  onChange={(event) => handleCountChange(event.target.value)}
-                  className="w-full h-11 px-3 bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-[#4F46E5]"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={countInput}
+                    onChange={(event) => setCountInput(event.target.value.replace(/\D/g, ''))}
+                    className="flex-1 h-11 px-3 bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-[#4F46E5]"
+                  />
+                  <button
+                    onClick={handleCountConfirm}
+                    className="h-11 px-4 rounded-lg bg-[#111827] text-white text-sm font-medium hover:bg-black transition-colors"
+                  >
+                    Confirm
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -192,11 +207,11 @@ export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
                       onChange={(event) => handlePersonChange(idx, 'name', event.target.value)}
                       className="w-full h-10 px-3 bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-[#4F46E5]"
                     />
-                    <label className="block text-sm text-[#111827] mt-3 mb-2 font-medium">Amount (Taka)</label>
+                    <label className="block text-sm text-[#111827] mt-3 mb-2 font-medium">Paid Amount (Taka)</label>
                     <input
                       type="text"
-                      inputMode="decimal"
-                      placeholder="e.g. 600 or -200"
+                      inputMode="numeric"
+                      placeholder="e.g. 600"
                       value={person.amount}
                       onChange={(event) => handlePersonChange(idx, 'amount', event.target.value)}
                       className="w-full h-10 px-3 bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-[#4F46E5]"
@@ -217,14 +232,18 @@ export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
               {result && (
                 <div ref={resultRef} className="bg-white border border-[#E5E7EB] rounded-xl p-4">
                   <h3 className="font-bold text-[#111827]">Average Payment: {result.avg} taka</h3>
-                  {result.settlements.length === 0 && <p className="text-sm text-[#6B7280] mt-2">Everyone already paid equally.</p>}
+                  {result.settlements.length === 0 && (
+                    <p className="text-sm text-[#6B7280] mt-2">Everyone already paid equally.</p>
+                  )}
                   {result.settlements.map((item, index) => (
-                    <p key={index} className="text-sm text-[#374151] mt-4">
+                    <p key={index} className="text-sm text-[#374151] mt-3">
                       <strong>{item.from}</strong> will pay <strong>{item.amount}</strong> taka to <strong>{item.to}</strong>
                     </p>
                   ))}
                 </div>
               )}
+
+              <p className="text-center text-xs text-[#6B7280]">© 2026 MD Rezaul Karim.</p>
             </div>
           </motion.div>
         </>
