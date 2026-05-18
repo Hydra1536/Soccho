@@ -46,10 +46,38 @@ type NotificationListResponse = {
   results: ApiNotificationRow[];
 };
 
+const SEEN_NOTIFICATION_IDS_KEY = 'seen_notification_ids';
+
+function readSeenNotificationIds(): string[] {
+  try {
+    const raw = localStorage.getItem(SEEN_NOTIFICATION_IDS_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((item) => String(item)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function writeSeenNotificationIds(ids: string[]) {
+  try {
+    const normalized = Array.from(new Set(ids)).slice(0, 2000);
+    localStorage.setItem(SEEN_NOTIFICATION_IDS_KEY, JSON.stringify(normalized));
+  } catch {
+    return;
+  }
+}
+
 export function NotificationDrawer({ isOpen, onClose, notifications, onNotificationsChange, onUnreadCountChange }: NotificationDrawerProps) {
   const navigate = useNavigate();
   const wsRef = useRef<WebSocket | null>(null);
   const isOpenRef = useRef<boolean>(isOpen);
+  const seenIdsRef = useRef<string[]>(readSeenNotificationIds());
   const notificationsRef = useRef<NotificationItem[]>(notifications);
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -58,7 +86,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
   const [loadingInitial, setLoadingInitial] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showMoreButton, setShowMoreButton] = useState(false);
-  const [unseenIds, setUnseenIds] = useState<string[]>([]);
+  const [unseenIds, setUnseenIds] = useState<string[]>(() => []);
 
   useEffect(() => {
     notificationsRef.current = notifications;
@@ -147,9 +175,22 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     if (!isOpen) {
       return;
     }
+    const currentIds = notificationsRef.current.map((item) => item.id);
+    const mergedSeen = Array.from(new Set([...seenIdsRef.current, ...currentIds]));
+    seenIdsRef.current = mergedSeen;
+    writeSeenNotificationIds(mergedSeen);
     setUnseenIds([]);
     void fetchNotificationPage(null, false);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || notifications.length === 0) {
+      return;
+    }
+    const mergedSeen = Array.from(new Set([...seenIdsRef.current, ...notifications.map((item) => item.id)]));
+    seenIdsRef.current = mergedSeen;
+    writeSeenNotificationIds(mergedSeen);
+  }, [isOpen, notifications]);
 
   useEffect(() => {
     let cancelled = false;
@@ -217,6 +258,10 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
             };
             onNotificationsChange?.(dedupeById([item, ...notificationsRef.current]));
             if (!isOpenRef.current) {
+              const alreadySeen = seenIdsRef.current.includes(item.id);
+              if (alreadySeen) {
+                return;
+              }
               setUnseenIds((prev) => {
                 if (prev.includes(item.id)) {
                   return prev;

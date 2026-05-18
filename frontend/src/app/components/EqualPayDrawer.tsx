@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Calculator, X } from 'lucide-react';
 
@@ -72,12 +72,13 @@ export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
   ]);
   const [result, setResult] = useState<{ avg: string; settlements: Settlement[] } | null>(null);
   const [error, setError] = useState('');
+  const resultRef = useRef<HTMLDivElement | null>(null);
 
-  const peopleCount = useMemo(() => Math.max(2, Math.min(20, Number(count) || 2)), [count]);
+  const peopleCount = useMemo(() => Math.max(2, Number(count) || 2), [count]);
 
   const ensureCount = (nextCount: number) => {
     setPeople((prev) => {
-      const normalized = Math.max(2, Math.min(20, nextCount));
+      const normalized = Math.max(2, nextCount);
       if (prev.length === normalized) {
         return prev;
       }
@@ -90,7 +91,7 @@ export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
   };
 
   const handleCountChange = (raw: string) => {
-    const numeric = Math.max(2, Math.min(20, Number(raw.replace(/\D/g, '')) || 2));
+    const numeric = Math.max(2, Number(raw.replace(/\D/g, '')) || 2);
     setCount(numeric);
     ensureCount(numeric);
     setResult(null);
@@ -131,6 +132,13 @@ export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
     setResult(calculated);
     setError('');
   };
+
+  useEffect(() => {
+    if (!result) {
+      return;
+    }
+    resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [result]);
 
   return (
     <AnimatePresence>
@@ -207,11 +215,11 @@ export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
               </button>
 
               {result && (
-                <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                <div ref={resultRef} className="bg-white border border-[#E5E7EB] rounded-xl p-4">
                   <h3 className="font-bold text-[#111827]">Average Payment: {result.avg} taka</h3>
                   {result.settlements.length === 0 && <p className="text-sm text-[#6B7280] mt-2">Everyone already paid equally.</p>}
                   {result.settlements.map((item, index) => (
-                    <p key={index} className="text-sm text-[#374151] mt-2">
+                    <p key={index} className="text-sm text-[#374151] mt-4">
                       <strong>{item.from}</strong> will pay <strong>{item.amount}</strong> taka to <strong>{item.to}</strong>
                     </p>
                   ))}

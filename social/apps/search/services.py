@@ -1,6 +1,5 @@
 import json
 import time
-from decimal import Decimal
 from typing import Any
 
 import redis
@@ -65,22 +64,38 @@ def get_loyalty_score(user_id: str) -> float:
         client = None
 
     try:
-        confirmed = SearchableTransaction.objects.filter(
-            status=SearchableTransaction.STATUS_CONFIRMED,
-            is_deleted=False,
-        )
-        given_rows = list(confirmed.filter(lender_id=user_id).only('amount'))
-        lent_rows = list(confirmed.filter(borrower_id=user_id).only('amount'))
-        total_given = float(sum((row.amount for row in given_rows), start=Decimal('0')))
-        total_lent = float(sum((row.amount for row in lent_rows), start=Decimal('0')))
-        total_transactions = float(len(given_rows) + len(lent_rows))
+        active = SearchableTransaction.objects.filter(is_deleted=False)
+        borrower_all = list(active.filter(borrower_id=user_id).only('status', 'due_date', 'updated_at'))
     except DatabaseError:
         return 0.0
 
-    if total_transactions <= 0:
-        score = 0.0
-    else:
-        score = (total_given - total_lent) / total_transactions
+    total_borrow_transactions = len(borrower_all)
+    confirmed_borrow = [row for row in borrower_all if row.status == SearchableTransaction.STATUS_CONFIRMED]
+    confirmed_borrow_count = len(confirmed_borrow)
+
+    repayments_due = [row for row in confirmed_borrow if row.due_date is not None]
+    on_time_count = sum(
+        1
+        for row in repayments_due
+        if row.updated_at is not None and row.updated_at.date() <= row.due_date
+    )
+
+    total_confirmed_transactions = active.filter(status=SearchableTransaction.STATUS_CONFIRMED).count()
+
+    on_time_repayment_rate = (on_time_count / len(repayments_due)) if repayments_due else 0.0
+    repayment_completion_rate = (
+        confirmed_borrow_count / total_borrow_transactions
+        if total_borrow_transactions > 0
+        else 0.0
+    )
+    transaction_consistency = min(1.0, total_confirmed_transactions / 20.0)
+
+    score = 100.0 * (
+        0.60 * on_time_repayment_rate
+        + 0.25 * repayment_completion_rate
+        + 0.15 * transaction_consistency
+    )
+    score = max(0.0, min(100.0, score))
 
     if client is not None:
         try:

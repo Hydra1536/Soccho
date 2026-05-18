@@ -20,8 +20,10 @@ class SearchableTransaction(models.Model):
     lender_id = models.UUIDField()
     borrower_id = models.UUIDField()
     amount = encrypt(models.DecimalField(max_digits=12, decimal_places=2))
+    due_date = encrypt(models.DateField(null=True, blank=True))
     status = models.CharField(max_length=16)
     is_deleted = models.BooleanField(default=False)
+    updated_at = models.DateTimeField()
 
     class Meta:
         managed = False
