@@ -4,7 +4,6 @@ from typing import Any
 
 import redis
 from django.contrib.postgres.search import TrigramSimilarity
-from django.db import DatabaseError
 from django.db.models import Q
 
 from django.conf import settings
@@ -68,8 +67,9 @@ def get_loyalty_score(user_id: str) -> float:
         involved = list(
             SearchableTransaction.objects.filter(is_deleted=False)
             .filter(Q(lender_id=user_id) | Q(borrower_id=user_id))
+            .only('status', 'due_date', 'updated_at', 'borrower_id', 'lender_id')
         )
-    except DatabaseError:
+    except Exception:
         return 0.0
 
     total_transactions = len(involved)

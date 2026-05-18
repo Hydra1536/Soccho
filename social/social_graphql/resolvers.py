@@ -37,6 +37,10 @@ class FriendListQuery(graphene.ObjectType):
         for edge in queryset:
             friend_id = edge.addressee_id if str(edge.requester_id) == user_id else edge.requester_id
             username = usernames.get(str(friend_id), '')
+            try:
+                loyalty_score = get_loyalty_score(str(friend_id))
+            except Exception:
+                loyalty_score = 0.0
             rows.append(
                 FriendNode(
                     friendship_id=str(edge.id),
@@ -46,7 +50,7 @@ class FriendListQuery(graphene.ObjectType):
                     created_at=edge.created_at.isoformat(),
                     user_id=friend_id,
                     username=username,
-                    loyalty_score=get_loyalty_score(str(friend_id)),
+                    loyalty_score=loyalty_score,
                 )
             )
         return rows

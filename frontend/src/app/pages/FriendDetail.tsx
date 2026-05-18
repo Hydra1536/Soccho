@@ -109,10 +109,10 @@ export default function FriendDetail() {
       return;
     }
     if (previousLedgerData?.friendLedger) {
-      setApiError('Showing cached ledger data.');
+      setApiError('ক্যাশ করা হিসাব দেখানো হচ্ছে।');
       return;
     }
-    setApiError('Unable to load friend ledger right now.');
+    setApiError('এই মুহূর্তে বন্ধুর হিসাব লোড করা যাচ্ছে না।');
   }, [ledgerError, previousLedgerData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -133,7 +133,7 @@ export default function FriendDetail() {
       setAmount('');
       setDueDate('');
     } catch {
-      setApiError('Unable to submit transaction. Please try again.');
+      setApiError('ট্রানজ্যাকশন জমা দেওয়া যায়নি। আবার চেষ্টা করুন।');
     } finally {
       setLoading(false);
     }
@@ -153,7 +153,7 @@ export default function FriendDetail() {
       await api.post('/api/social/unfriend/', { user_id: friendUserId });
       navigate('/home');
     } catch {
-      setApiError('Unable to unfriend right now. Please try again.');
+      setApiError('এখন আনফ্রেন্ড করা যাচ্ছে না। আবার চেষ্টা করুন।');
     } finally {
       setUnfriendLoading(false);
     }
@@ -173,8 +173,8 @@ export default function FriendDetail() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-6 space-y-6">
-        {(friendsLoading || ledgerLoading) && !ledger && <p className="text-sm text-[#6B7280]">Loading friend details...</p>}
-        {friendsError && !friend && <p className="text-sm text-[#DC2626]">Unable to load friend profile right now.</p>}
+        {(friendsLoading || ledgerLoading) && !ledger && <p className="text-sm text-[#6B7280]">বন্ধুর তথ্য লোড হচ্ছে...</p>}
+        {friendsError && !friend && <p className="text-sm text-[#DC2626]">বন্ধুর প্রোফাইল লোড করা যাচ্ছে না।</p>}
         {apiError && <p className={`text-sm ${apiError.includes('cached') ? 'text-[#B45309]' : 'text-[#DC2626]'}`}>{apiError}</p>}
 
         <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
@@ -184,17 +184,17 @@ export default function FriendDetail() {
           <h2 className="font-bold text-xl mb-2" style={{ fontFamily: 'var(--font-display)' }}>
             {friendName}
           </h2>
-          <p className="text-sm text-[#6B7280] mb-4">Net Balance</p>
+          <p className="text-sm text-[#6B7280] mb-4">মোট হিসাব</p>
           <p className={`text-4xl font-medium ${netBalance >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
             {netBalance >= 0 ? '+' : '-'}TK {Math.abs(netBalance).toLocaleString()}
           </p>
-          <p className="text-xs text-[#6B7280] mt-2">{netBalance >= 0 ? 'They owe you' : 'You owe them'}</p>
+          <p className="text-xs text-[#6B7280] mt-2">{netBalance >= 0 ? 'আপনি টাকা পাবেন' : 'আপনাকে টাকা দিতে হবে'}</p>
           {(pendingReceivable > 0 || pendingPayable > 0) && (
             <div className="mt-4 rounded-xl bg-[#FEF3C7] border border-[#FCD34D] p-3 text-left">
-              <p className="text-xs font-medium text-[#92400E]">Pending approvals</p>
-              {pendingReceivable > 0 && <p className="text-sm text-[#92400E] mt-1">You will receive: TK {pendingReceivable.toLocaleString()}</p>}
-              {pendingPayable > 0 && <p className="text-sm text-[#92400E] mt-1">You need to approve: TK {pendingPayable.toLocaleString()}</p>}
-              <p className="text-xs text-[#92400E] mt-2">Pending transactions: {pendingTransactions.length}</p>
+              <p className="text-xs font-medium text-[#92400E]">পেন্ডিং অনুমোদন</p>
+              {pendingReceivable > 0 && <p className="text-sm text-[#92400E] mt-1">আপনি পাবেন: TK {pendingReceivable.toLocaleString()}</p>}
+              {pendingPayable > 0 && <p className="text-sm text-[#92400E] mt-1">আপনাকে নিশ্চিত করতে হবে: TK {pendingPayable.toLocaleString()}</p>}
+              <p className="text-xs text-[#92400E] mt-2">পেন্ডিং ট্রানজ্যাকশন: {pendingTransactions.length}</p>
             </div>
           )}
           <button
@@ -206,17 +206,17 @@ export default function FriendDetail() {
                 : 'bg-[#FEE2E2] text-[#B91C1C] hover:bg-[#FECACA]'
             }`}
           >
-            {unfriendLoading ? 'Removing...' : 'Unfriend'}
+            {unfriendLoading ? 'সরানো হচ্ছে...' : 'Unfriend'}
           </button>
         </div>
 
         <div className="bg-white rounded-2xl p-6 shadow-sm">
           <h3 className="font-bold text-lg mb-4" style={{ fontFamily: 'var(--font-display)' }}>
-            Give / Lend Money
+            টাকা দিন / যোগ করুন
           </h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm text-[#111827] mb-2 font-medium">Amount</label>
+              <label className="block text-sm text-[#111827] mb-2 font-medium">পরিমাণ</label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl text-[#111827]" style={{ fontFamily: 'var(--font-mono)' }}>
                   TK
@@ -233,16 +233,16 @@ export default function FriendDetail() {
               </div>
             </div>
 
-            <Input type="date" label="Due Date (optional)" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            <Input type="date" label="শেষ তারিখ (ঐচ্ছিক)" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             <Button type="submit" fullWidth className="mt-6" disabled={loading || !friendUserId}>
-              {loading ? 'Submitting...' : 'Submit'}
+              {loading ? 'জমা হচ্ছে...' : 'Submit'}
             </Button>
           </form>
         </div>
 
         <div>
           <h3 className="font-bold text-lg mb-3" style={{ fontFamily: 'var(--font-display)' }}>
-            Transaction History
+            ট্রানজ্যাকশন হিসাব
           </h3>
           <div className="space-y-3">
             {historyTransactions.map((transaction, index) => {
@@ -267,7 +267,7 @@ export default function FriendDetail() {
                         <StatusChip status={transaction.status} />
                       </div>
                       <p className="text-xs text-[#9CA3AF]">
-                        {transaction.due_date ? new Date(transaction.due_date).toLocaleDateString('en-GB') : 'No due date'}
+                        {transaction.due_date ? new Date(transaction.due_date).toLocaleDateString('en-GB') : 'শেষ তারিখ নেই'}
                       </p>
                     </div>
                   </div>
@@ -276,7 +276,7 @@ export default function FriendDetail() {
             })}
             {historyTransactions.length === 0 && (
               <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <p className="text-sm text-[#6B7280]">No confirmed or denied transactions yet.</p>
+                <p className="text-sm text-[#6B7280]">এখনও নিশ্চিত বা বাতিল ট্রানজ্যাকশন নেই।</p>
               </div>
             )}
           </div>

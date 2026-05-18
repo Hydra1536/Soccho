@@ -111,20 +111,20 @@ export default function Home() {
       }
 
       const pendingTotal = Math.abs(pendingReceivable) + Math.abs(pendingPayable);
-      let pendingLabel = 'No pending approvals';
+      let pendingLabel = 'পেন্ডিং নেই';
       if (pendingReceivable > 0 && pendingPayable > 0) {
-        pendingLabel = `Pending: receive ৳${pendingReceivable.toLocaleString()} • pay ৳${pendingPayable.toLocaleString()}`;
+        pendingLabel = `পেন্ডিং: পাবেন ${pendingReceivable.toLocaleString()} টাকা, দিবেন ${pendingPayable.toLocaleString()} টাকা`;
       } else if (pendingReceivable > 0) {
-        pendingLabel = `Pending to receive: ৳${pendingReceivable.toLocaleString()}`;
+        pendingLabel = `পেন্ডিং: আপনি পাবেন ${pendingReceivable.toLocaleString()} টাকা`;
       } else if (pendingPayable > 0) {
-        pendingLabel = `Pending to pay: ৳${pendingPayable.toLocaleString()}`;
+        pendingLabel = `পেন্ডিং: আপনাকে দিতে হবে ${pendingPayable.toLocaleString()} টাকা`;
       }
 
-      let subtitle = 'No confirmed dues';
+      let subtitle = 'কোনো নিশ্চিত বকেয়া নেই';
       if (netBalance > 0) {
-        subtitle = 'Owes you';
+        subtitle = `আপনি পাবেন ${Math.abs(netBalance).toLocaleString()} টাকা`;
       } else if (netBalance < 0) {
-        subtitle = 'You owe';
+        subtitle = `আপনাকে দিতে হবে ${Math.abs(netBalance).toLocaleString()} টাকা`;
       }
 
       return {
@@ -183,7 +183,7 @@ export default function Home() {
           setFriendCards([]);
         }
         if (!cancelled) {
-          setFriendsErrorMessage('Unable to load friends right now.');
+          setFriendsErrorMessage('এই মুহূর্তে বন্ধুদের তথ্য লোড করা যাচ্ছে না।');
           setNextFriendsCursor(null);
         }
       } finally {
@@ -239,20 +239,20 @@ export default function Home() {
           }
 
           const pendingTotal = Math.abs(pendingReceivable) + Math.abs(pendingPayable);
-          let pendingLabel = 'No pending approvals';
+          let pendingLabel = 'পেন্ডিং নেই';
           if (pendingReceivable > 0 && pendingPayable > 0) {
-            pendingLabel = `Pending: receive ৳${pendingReceivable.toLocaleString()} • pay ৳${pendingPayable.toLocaleString()}`;
+            pendingLabel = `পেন্ডিং: পাবেন ${pendingReceivable.toLocaleString()} টাকা, দিবেন ${pendingPayable.toLocaleString()} টাকা`;
           } else if (pendingReceivable > 0) {
-            pendingLabel = `Pending to receive: ৳${pendingReceivable.toLocaleString()}`;
+            pendingLabel = `পেন্ডিং: আপনি পাবেন ${pendingReceivable.toLocaleString()} টাকা`;
           } else if (pendingPayable > 0) {
-            pendingLabel = `Pending to pay: ৳${pendingPayable.toLocaleString()}`;
+            pendingLabel = `পেন্ডিং: আপনাকে দিতে হবে ${pendingPayable.toLocaleString()} টাকা`;
           }
 
-          let subtitle = 'No confirmed dues';
+          let subtitle = 'কোনো নিশ্চিত বকেয়া নেই';
           if (netBalance > 0) {
-            subtitle = 'Owes you';
+            subtitle = `আপনি পাবেন ${Math.abs(netBalance).toLocaleString()} টাকা`;
           } else if (netBalance < 0) {
-            subtitle = 'You owe';
+            subtitle = `আপনাকে দিতে হবে ${Math.abs(netBalance).toLocaleString()} টাকা`;
           }
 
           return {
@@ -293,7 +293,7 @@ export default function Home() {
         }
       }
     } catch {
-      setFriendsErrorMessage('Unable to load more friends right now.');
+      setFriendsErrorMessage('আরও বন্ধু লোড করা যাচ্ছে না।');
     } finally {
       setFriendsLoadingMore(false);
     }
@@ -385,11 +385,11 @@ export default function Home() {
 
         <div>
           <h2 className="font-bold text-lg mb-3" style={{ fontFamily: 'var(--font-display)' }}>
-            Friends
+            বন্ধুদের হিসাব
           </h2>
-          {friendsLoading && friendCards.length === 0 && <p className="text-sm text-[#6B7280] mb-3">Loading friends...</p>}
+          {friendsLoading && friendCards.length === 0 && <p className="text-sm text-[#6B7280] mb-3">বন্ধুদের তথ্য লোড হচ্ছে...</p>}
           {friendsErrorMessage && <p className="text-sm text-[#B45309] mb-3">{friendsErrorMessage}</p>}
-          {isOffline && friendCards.length > 0 && <p className="text-xs text-[#6B7280] mb-3">Offline mode: showing cached data.</p>}
+          {isOffline && friendCards.length > 0 && <p className="text-xs text-[#6B7280] mb-3">অফলাইন মোড: সেভ করা ডেটা দেখানো হচ্ছে।</p>}
           <div className="space-y-3">
             {friendCards.map((friend) => (
               <Link key={friend.id} to={`/friend/${friend.id}`} className="block">
@@ -415,7 +415,7 @@ export default function Home() {
                 friendsLoadingMore ? 'bg-[#E5E7EB] text-[#6B7280]' : 'bg-[#111827] text-white hover:bg-black'
               }`}
             >
-              {friendsLoadingMore ? 'Loading...' : 'Load 5 more'}
+              {friendsLoadingMore ? 'লোড হচ্ছে...' : 'আরও ৫ জন দেখুন'}
             </button>
           )}
         </div>

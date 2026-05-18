@@ -100,8 +100,25 @@ export async function googleLogin(onWarmupStatus?: WarmupStatusCallback): Promis
 }
 
 export async function fetchCurrentUser(): Promise<CurrentUser> {
-  const { data } = await api.get<CurrentUser>('/api/auth/me/');
-  localStorage.setItem(USERNAME_KEY, data.username);
-  localStorage.setItem(EMAIL_KEY, data.email);
-  return data;
+  const maxAttempts = 3;
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const { data } = await api.get<CurrentUser>('/api/auth/me/');
+      localStorage.setItem(USERNAME_KEY, data.username);
+      localStorage.setItem(EMAIL_KEY, data.email);
+      return data;
+    } catch (error: any) {
+      lastError = error;
+      const status = Number(error?.response?.status || 0);
+      const retryable = status === 502 || status === 503 || status === 504;
+      if (!retryable || attempt === maxAttempts) {
+        break;
+      }
+      await wait(900 * attempt);
+    }
+  }
+
+  throw lastError;
 }

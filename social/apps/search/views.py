@@ -40,15 +40,22 @@ class UserSearchView(APIView):
             matches = list(fuzzy_search_usernames(queryset, query)[:20])
         except DatabaseError:
             matches = list(fallback_search_usernames(queryset, query)[:20])
+        except Exception:
+            matches = list(fallback_search_usernames(queryset, query)[:20])
 
-        payload = [
-            {
-                'id': str(user.id),
-                'username': user.username,
-                'loyalty_score': get_loyalty_score(str(user.id)),
-            }
-            for user in matches
-        ]
+        payload = []
+        for user in matches:
+            try:
+                loyalty_score = get_loyalty_score(str(user.id))
+            except Exception:
+                loyalty_score = 0.0
+            payload.append(
+                {
+                    'id': str(user.id),
+                    'username': user.username,
+                    'loyalty_score': loyalty_score,
+                }
+            )
         payload.sort(key=lambda row: (-(row.get('loyalty_score') or 0), str(row.get('username') or '').lower()))
         return Response({'results': payload})
 
@@ -66,4 +73,8 @@ class LoyaltyScoreView(APIView):
         user_id = _current_user_id(request)
         if not user_id:
             return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-        return Response({'user_id': user_id, 'loyalty_score': get_loyalty_score(user_id)}, status=status.HTTP_200_OK)
+        try:
+            score = get_loyalty_score(user_id)
+        except Exception:
+            score = 0.0
+        return Response({'user_id': user_id, 'loyalty_score': score}, status=status.HTTP_200_OK)
