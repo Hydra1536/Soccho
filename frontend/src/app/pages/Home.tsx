@@ -110,6 +110,31 @@ export default function Home() {
       }
     };
 
+    const getFriendCardValues = (netBalance: number, pendingReceivable: number, pendingPayable: number) => {
+      const pendingTotal = Math.abs(pendingReceivable) + Math.abs(pendingPayable);
+      const pendingNet = pendingReceivable - pendingPayable;
+      const hasPending = pendingTotal > 0;
+
+      let subtitle = 'কোনো বকেয়া নেই';
+      if (pendingNet > 0) {
+        subtitle = `আপনি পাবেন ${Math.abs(pendingNet).toLocaleString()} টাকা`;
+      } else if (pendingNet < 0) {
+        subtitle = `আপনাকে দিতে হবে ${Math.abs(pendingNet).toLocaleString()} টাকা`;
+      } else if (netBalance > 0) {
+        subtitle = `আপনি পাবেন ${Math.abs(netBalance).toLocaleString()} টাকা`;
+      } else if (netBalance < 0) {
+        subtitle = `আপনাকে দিতে হবে ${Math.abs(netBalance).toLocaleString()} টাকা`;
+      }
+
+      const hasConfirmedBalance = netBalance !== 0;
+      return {
+        pendingTotal,
+        displayBalance: hasConfirmedBalance ? Math.abs(netBalance) : Math.abs(pendingNet),
+        displayType: hasConfirmedBalance ? (netBalance >= 0 ? 'owed' : 'owe') : pendingNet >= 0 ? 'owed' : 'owe',
+        subtitle,
+      } as const;
+    };
+
     const buildCard = async (friend: FriendApiRow, idx: number): Promise<FriendCard> => {
       let netBalance = 0;
       let pendingReceivable = 0;
@@ -135,25 +160,14 @@ export default function Home() {
         pendingPayable = Number(cached?.friendLedger?.pendingPayable || 0);
       }
 
-      const pendingTotal = Math.abs(pendingReceivable) + Math.abs(pendingPayable);
-      const pendingNet = pendingReceivable - pendingPayable;
-      let subtitle = 'কোনো বকেয়া নেই';
-      if (pendingNet > 0) {
-        subtitle = `আপনি পাবেন ${Math.abs(pendingNet).toLocaleString()} টাকা`;
-      } else if (pendingNet < 0) {
-        subtitle = `আপনাকে দিতে হবে ${Math.abs(pendingNet).toLocaleString()} টাকা`;
-      } else if (netBalance > 0) {
-        subtitle = `আপনি পাবেন ${Math.abs(netBalance).toLocaleString()} টাকা`;
-      } else if (netBalance < 0) {
-        subtitle = `আপনাকে দিতে হবে ${Math.abs(netBalance).toLocaleString()} টাকা`;
-      }
+      const { pendingTotal, displayBalance, displayType, subtitle } = getFriendCardValues(netBalance, pendingReceivable, pendingPayable);
 
       return {
         id: String(friend.id || ''),
         name: friend.counterpart_username || `Friend ${idx + 1}`,
         subtitle,
-        balance: Math.abs(netBalance),
-        type: netBalance >= 0 ? ('owed' as const) : ('owe' as const),
+        balance: displayBalance,
+        type: displayType,
         pendingTotal,
       };
     };
@@ -258,25 +272,14 @@ export default function Home() {
             pendingPayable = Number(cached?.friendLedger?.pendingPayable || 0);
           }
 
-          const pendingTotal = Math.abs(pendingReceivable) + Math.abs(pendingPayable);
-          const pendingNet = pendingReceivable - pendingPayable;
-          let subtitle = 'কোনো বকেয়া নেই';
-          if (pendingNet > 0) {
-            subtitle = `আপনি পাবেন ${Math.abs(pendingNet).toLocaleString()} টাকা`;
-          } else if (pendingNet < 0) {
-            subtitle = `আপনাকে দিতে হবে ${Math.abs(pendingNet).toLocaleString()} টাকা`;
-          } else if (netBalance > 0) {
-            subtitle = `আপনি পাবেন ${Math.abs(netBalance).toLocaleString()} টাকা`;
-          } else if (netBalance < 0) {
-            subtitle = `আপনাকে দিতে হবে ${Math.abs(netBalance).toLocaleString()} টাকা`;
-          }
+          const { pendingTotal, displayBalance, displayType, subtitle } = getFriendCardValues(netBalance, pendingReceivable, pendingPayable);
 
           return {
             id: String(friend.id || ''),
             name: friend.counterpart_username || `Friend ${idx + 1}`,
             subtitle,
-            balance: Math.abs(netBalance),
-            type: netBalance >= 0 ? ('owed' as const) : ('owe' as const),
+            balance: displayBalance,
+            type: displayType,
             pendingTotal,
           } satisfies FriendCard;
         })
@@ -373,6 +376,9 @@ export default function Home() {
           </h2>
           {summaryLoading && !summary && <p className="text-sm text-[#6B7280] mb-4">Loading summary...</p>}
           {summaryError && !summary && <p className="text-sm text-[#B45309] mb-4">Unable to load summary right now.</p>}
+          {!summary && !summaryLoading && !summaryError && (
+            <p className="text-sm text-[#6B7280] mb-4">কোনো সারাংশ ডেটা পাওয়া যাচ্ছেনা, প্রথমে ট্রানজ্যাকশন করুন।</p>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <ResponsiveContainer width="100%" height={150}>

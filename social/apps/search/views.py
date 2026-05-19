@@ -1,6 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
-
-from django.db import DatabaseError
 from django.http import JsonResponse
 from rest_framework import status
 from rest_framework.response import Response
@@ -10,12 +7,12 @@ from apps.search.models import SearchableUser
 from apps.search.services import (
     exact_key_search_usernames,
     fallback_search_usernames,
-    fuzzy_search_usernames,
     get_loyalty_score,
     get_search_history,
     get_transaction_totals,
     normalize_search_key,
     save_search_history,
+    score_username_match,
 )
 
 
@@ -55,66 +52,38 @@ class UserSearchView(APIView):
         save_search_history(user_id, query)
 
         queryset = SearchableUser.objects.exclude(id=user_id)
-        cleaned_query = normalize_search_key(query)
 
-        def run_exact():
-            rows = list(exact_key_search_usernames(queryset, cleaned_query)[:20])
-            return [
-                {
-                    'id': str(user.id),
-                    'username': user.username,
-                    'match_type': 'exact',
-                    'similarity': 1.0,
-                }
-                for user in rows
-            ]
+        exact_rows = []
+        try:
+            exact_rows = list(exact_key_search_usernames(queryset, query)[:20])
+        except Exception:
+            exact_rows = []
 
-        def run_trigram():
-            threshold = 0.2 if len(cleaned_query) <= 3 else 0.3
-            rows = list(fuzzy_search_usernames(queryset, query, threshold=threshold)[:30])
-            return [
-                {
-                    'id': str(user.id),
-                    'username': user.username,
-                    'match_type': 'fuzzy',
-                    'similarity': float(getattr(user, 'similarity', 0.0)),
-                }
-                for user in rows
-            ]
-
-        exact_matches = []
-        trigram_matches = []
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            exact_future = pool.submit(run_exact)
-            trigram_future = pool.submit(run_trigram)
-
-            try:
-                exact_matches = exact_future.result(timeout=2.0)
-            except Exception:
-                exact_matches = []
-
-            try:
-                trigram_matches = trigram_future.result(timeout=2.0)
-            except (DatabaseError, TimeoutError, Exception):
-                try:
-                    fallback_rows = list(fallback_search_usernames(queryset, query)[:20])
-                    trigram_matches = [
-                        {
-                            'id': str(user.id),
-                            'username': user.username,
-                            'match_type': 'fuzzy',
-                            'similarity': 0.0,
-                        }
-                        for user in fallback_rows
-                    ]
-                except Exception:
-                    trigram_matches = []
+        try:
+            candidate_rows = list(queryset.filter(username__icontains=query).order_by('username')[:80])
+        except Exception:
+            candidate_rows = list(fallback_search_usernames(queryset, query)[:80])
 
         merged_by_id: dict[str, dict] = {}
-        for row in trigram_matches:
-            merged_by_id[row['id']] = row
-        for row in exact_matches:
-            merged_by_id[row['id']] = row
+        for user in exact_rows:
+            merged_by_id[str(user.id)] = {
+                'id': str(user.id),
+                'username': user.username,
+                'match_type': 'exact',
+                'similarity': 1.0,
+            }
+
+        for user in candidate_rows:
+            user_id_str = str(user.id)
+            if user_id_str in merged_by_id:
+                continue
+            match_type, similarity = score_username_match(user.username, query)
+            merged_by_id[user_id_str] = {
+                'id': user_id_str,
+                'username': user.username,
+                'match_type': match_type,
+                'similarity': similarity,
+            }
 
         payload = []
         for row in merged_by_id.values():
@@ -140,7 +109,7 @@ class UserSearchView(APIView):
         payload.sort(
             key=lambda row: (
                 *_context_rank(str(row.get('username') or ''), query),
-                0 if row.get('match_type') == 'exact' else 1,
+                {'exact': 0, 'prefix': 1, 'substring': 2, 'phonetic': 3, 'fuzzy': 4}.get(row.get('match_type'), 4),
                 -(row.get('similarity') or 0.0),
                 -(row.get('loyalty_score') or 0.0),
                 str(row.get('username') or '').lower(),

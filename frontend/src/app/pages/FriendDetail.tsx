@@ -102,7 +102,7 @@ export default function FriendDetail() {
     due_date: String(tx.dueDate || ''),
   }));
   const pendingTransactions = transactions.filter((tx) => tx.status === 'pending');
-  const historyTransactions = transactions.filter((tx) => tx.status !== 'pending');
+  const historyTransactions = transactions;
 
   useEffect(() => {
     if (!ledgerError) {
@@ -287,7 +287,7 @@ export default function FriendDetail() {
             })}
             {historyTransactions.length === 0 && (
               <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <p className="text-sm text-[#6B7280]">এখনও নিশ্চিত বা বাতিল ট্রানজ্যাকশন নেই।</p>
+                <p className="text-sm text-[#6B7280]">এখনও কোনো ট্রানজ্যাকশন নেই।</p>
               </div>
             )}
           </div>

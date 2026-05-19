@@ -5,7 +5,6 @@ from decimal import Decimal
 from typing import Any
 
 import redis
-from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Q
 from django.db.models import Value
 from django.db.models.functions import Lower, Replace
@@ -19,28 +18,93 @@ def _redis_client() -> redis.Redis:
     return redis.from_url(settings.REDIS_CACHE_URL, decode_responses=True)
 
 
-def fuzzy_search_usernames(queryset, query: str, threshold: float = 0.3):
-    # pg_trgm similarity-based fuzzy search on username.
-    return (
-        queryset.annotate(similarity=TrigramSimilarity('username', query))
-        .filter(similarity__gt=threshold)
-        .order_by('-similarity', 'username')
-    )
+def levenshtein_distance(a: str, b: str) -> int:
+    if a == b:
+        return 0
+    if len(a) == 0:
+        return len(b)
+    if len(b) == 0:
+        return len(a)
+
+    previous_row = list(range(len(b) + 1))
+    for i, ca in enumerate(a, start=1):
+        current_row = [i]
+        for j, cb in enumerate(b, start=1):
+            insertions = previous_row[j] + 1
+            deletions = current_row[j - 1] + 1
+            substitutions = previous_row[j - 1] + (ca != cb)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    return previous_row[-1]
+
+
+def soundex(value: str) -> str:
+    cleaned = re.sub(r'[^a-z]', '', value.lower())
+    if not cleaned:
+        return ''
+
+    mapping = {
+        'b': '1', 'f': '1', 'p': '1', 'v': '1',
+        'c': '2', 'g': '2', 'j': '2', 'k': '2', 'q': '2', 's': '2', 'x': '2', 'z': '2',
+        'd': '3', 't': '3',
+        'l': '4',
+        'm': '5', 'n': '5',
+        'r': '6',
+    }
+
+    first_letter = cleaned[0].upper()
+    encoded = [first_letter]
+    last_code = mapping.get(cleaned[0], '')
+
+    for char in cleaned[1:]:
+        code = mapping.get(char, '0')
+        if code == last_code or code == '0':
+            last_code = code
+            continue
+        encoded.append(code)
+        last_code = code
+        if len(encoded) >= 4:
+            break
+
+    return ''.join(encoded).ljust(4, '0')[:4]
+
+
+def normalize_search_key(value: str) -> str:
+    key = re.sub(r'[^a-z0-9]+', '', value.strip().lower())
+    return key
+
+
+def score_username_match(username: str, query: str) -> tuple[str, float]:
+    cleaned_username = normalize_search_key(username)
+    cleaned_query = normalize_search_key(query)
+
+    if cleaned_username == cleaned_query:
+        return 'exact', 1.0
+    if cleaned_username.startswith(cleaned_query):
+        return 'prefix', 0.95
+    if cleaned_query in cleaned_username:
+        return 'substring', 0.9
+    if soundex(cleaned_username) and soundex(cleaned_username) == soundex(cleaned_query):
+        return 'phonetic', 0.85
+
+    distance = levenshtein_distance(cleaned_username, cleaned_query)
+    similarity = 1.0 - (distance / max(len(cleaned_username), len(cleaned_query), 1))
+    return 'fuzzy', max(0.0, similarity)
 
 
 def fallback_search_usernames(queryset, query: str):
     return queryset.filter(username__icontains=query).order_by('username')
 
 
-def normalize_search_key(value: str) -> str:
-    return re.sub(r'[_-]+', '', value.strip().lower())
-
-
 def exact_key_search_usernames(queryset, query: str):
     cleaned_query = normalize_search_key(query)
     normalized_username = Replace(
-        Replace(Lower('username'), Value('_'), Value('')),
-        Value('-'),
+        Replace(
+            Replace(Lower('username'), Value('_'), Value('')),
+            Value('-'),
+            Value(''),
+        ),
+        Value(' '),
         Value(''),
     )
     return queryset.annotate(search_key=normalized_username).filter(search_key=cleaned_query).order_by('username')

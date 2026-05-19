@@ -1,6 +1,5 @@
 import uuid
 
-from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from django_cryptography.fields import encrypt
 
@@ -13,11 +12,7 @@ class SearchableUser(models.Model):
         managed = False
         db_table = 'users'
         indexes = [
-            GinIndex(
-                fields=['username'],
-                name='users_username_trgm_gin',
-                opclasses=['gin_trgm_ops'],
-            ),
+            models.Index(fields=['username'], name='users_username_idx'),
         ]
 
 
