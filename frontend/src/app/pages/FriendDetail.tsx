@@ -187,7 +187,7 @@ export default function FriendDetail() {
           </h2>
           <p className="text-sm text-[#6B7280] mb-4">মোট হিসাব</p>
           <p className={`text-4xl font-medium ${netBalance >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
-            {netBalance >= 0 ? '+' : '-'}TK {Math.abs(netBalance).toLocaleString()}
+            {netBalance >= 0 ? '+' : '-'}TK {Math.abs(pendingNet).toLocaleString()}
           </p>
           <p className="text-xs text-[#6B7280] mt-2">
             {pendingNet > 0
@@ -203,9 +203,6 @@ export default function FriendDetail() {
           {(pendingReceivable > 0 || pendingPayable > 0) && (
             <div className="mt-4 rounded-xl bg-[#FEF3C7] border border-[#FCD34D] p-3 text-left">
               <p className="text-xs font-medium text-[#92400E]">পেন্ডিং অনুমোদন</p>
-              {pendingNet > 0 && <p className="text-sm text-[#92400E] mt-1">আপনি পাবেন: TK {Math.abs(pendingNet).toLocaleString()}</p>}
-              {pendingNet < 0 && <p className="text-sm text-[#92400E] mt-1">আপনাকে নিশ্চিত করতে হবে: TK {Math.abs(pendingNet).toLocaleString()}</p>}
-              <p className="text-xs text-[#92400E] mt-2">পেন্ডিং ট্রানজ্যাকশন: {pendingTransactions.length}</p>
             </div>
           )}
           <button
