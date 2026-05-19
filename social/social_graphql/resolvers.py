@@ -3,7 +3,7 @@ from django.db.models import Q
 import graphene
 from apps.friendships.models import Friendship
 from apps.search.models import SearchableUser
-from apps.search.services import get_loyalty_score
+from apps.search.services import get_loyalty_score, get_transaction_totals
 from .types import FriendNode
 
 
@@ -41,6 +41,7 @@ class FriendListQuery(graphene.ObjectType):
                 loyalty_score = get_loyalty_score(str(friend_id))
             except Exception:
                 loyalty_score = 0.0
+            totals = get_transaction_totals(str(friend_id))
             rows.append(
                 FriendNode(
                     friendship_id=str(edge.id),
@@ -51,6 +52,9 @@ class FriendListQuery(graphene.ObjectType):
                     user_id=friend_id,
                     username=username,
                     loyalty_score=loyalty_score,
+                    total_given=float(totals.get('total_given', 0.0)),
+                    total_received=float(totals.get('total_received', 0.0)),
+                    total_transactions=int(totals.get('total_transactions', 0)),
                 )
             )
         return rows

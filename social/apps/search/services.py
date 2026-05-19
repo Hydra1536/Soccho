@@ -1,6 +1,7 @@
 import json
 import re
 import time
+from decimal import Decimal
 from typing import Any
 
 import redis
@@ -126,6 +127,30 @@ def get_loyalty_score(user_id: str) -> float:
         except redis.RedisError:
             pass
     return score
+
+
+def get_transaction_totals(user_id: str) -> dict[str, float | int]:
+    try:
+        involved = list(
+            SearchableTransaction.objects.filter(is_deleted=False)
+            .filter(Q(lender_id=user_id) | Q(borrower_id=user_id))
+            .only('status', 'amount', 'borrower_id', 'lender_id')
+        )
+    except Exception:
+        return {
+            'total_given': 0.0,
+            'total_received': 0.0,
+            'total_transactions': 0,
+        }
+
+    effective = [row for row in involved if row.status != 'denied']
+    total_given = sum((Decimal(row.amount) for row in effective if str(row.lender_id) == str(user_id)), start=Decimal('0'))
+    total_received = sum((Decimal(row.amount) for row in effective if str(row.borrower_id) == str(user_id)), start=Decimal('0'))
+    return {
+        'total_given': float(total_given),
+        'total_received': float(total_received),
+        'total_transactions': len(effective),
+    }
 
 
 def resolve_username(user_id: str) -> str:

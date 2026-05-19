@@ -16,8 +16,6 @@ type DashboardSummaryNode = {
   userId: string;
   totalLent: number;
   totalBorrowed: number;
-  totalConfirmed: number;
-  loyaltyScore?: number;
   monthlyTrend?: Array<{
     monthKey: string;
     label: string;
@@ -408,11 +406,7 @@ export default function Home() {
               )}
             </div>
           </div>
-          <div className="mt-3 rounded-lg bg-[#EEF2FF] border border-[#C7D2FE] p-3">
-            <p className="text-xs text-[#3730A3]">Loyalty Score</p>
-            <p className="text-lg font-semibold text-[#1E1B4B]">{Number(summary?.loyaltyScore || 0).toFixed(1)} / 100</p>
-          </div>
-          <div className="grid grid-cols-3 gap-2 mt-4">
+          <div className="grid grid-cols-2 gap-2 mt-4">
             <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 text-center">
               <p className="text-xs text-[#6B7280]">Given</p>
               <p className="text-sm font-semibold text-[#111827]">TK {Number(summary?.totalLent || 0).toLocaleString()}</p>
@@ -420,10 +414,6 @@ export default function Home() {
             <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 text-center">
               <p className="text-xs text-[#6B7280]">Received</p>
               <p className="text-sm font-semibold text-[#111827]">TK {Number(summary?.totalBorrowed || 0).toLocaleString()}</p>
-            </div>
-            <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 text-center">
-              <p className="text-xs text-[#6B7280]">Confirmed</p>
-              <p className="text-sm font-semibold text-[#111827]">{Number(summary?.totalConfirmed || 0).toLocaleString()}</p>
             </div>
           </div>
         </div>

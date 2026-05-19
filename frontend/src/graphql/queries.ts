@@ -11,6 +11,9 @@ export const GET_FRIENDS = gql`
       userId
       username
       loyaltyScore
+      totalGiven
+      totalReceived
+      totalTransactions
     }
   }
 `;
@@ -21,8 +24,6 @@ export const GET_DASHBOARD_SUMMARY = gql`
       userId
       totalLent
       totalBorrowed
-      totalConfirmed
-      loyaltyScore
       monthlyTrend {
         monthKey
         label

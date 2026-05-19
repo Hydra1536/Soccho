@@ -10,3 +10,6 @@ class FriendNode(graphene.ObjectType):
     user_id = graphene.UUID(required=True)
     username = graphene.String(required=True)
     loyalty_score = graphene.Float()
+    total_given = graphene.Float()
+    total_received = graphene.Float()
+    total_transactions = graphene.Int()

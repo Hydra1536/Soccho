@@ -98,13 +98,14 @@ def compute_dashboard_summary(user_id: str) -> DashboardSummaryComputed:
         .order_by('created_at')
     )
 
-    confirmed_rows = [row for row in rows if row.status == Transaction.STATUS_CONFIRMED]
-    total_lent = sum((Decimal(row.amount) for row in confirmed_rows if str(row.lender_id) == user_id), start=Decimal('0'))
-    total_borrowed = sum((Decimal(row.amount) for row in confirmed_rows if str(row.borrower_id) == user_id), start=Decimal('0'))
+    effective_rows = [row for row in rows if row.status != Transaction.STATUS_DENIED]
+    confirmed_rows = [row for row in effective_rows if row.status == Transaction.STATUS_CONFIRMED]
+    total_lent = sum((Decimal(row.amount) for row in effective_rows if str(row.lender_id) == user_id), start=Decimal('0'))
+    total_borrowed = sum((Decimal(row.amount) for row in effective_rows if str(row.borrower_id) == user_id), start=Decimal('0'))
     total_confirmed = len(confirmed_rows)
 
     monthly_map: dict[str, dict[str, Decimal | str]] = {}
-    for row in confirmed_rows:
+    for row in effective_rows:
         month_key = row.created_at.strftime('%Y-%m')
         if month_key not in monthly_map:
             monthly_map[month_key] = {
@@ -120,9 +121,9 @@ def compute_dashboard_summary(user_id: str) -> DashboardSummaryComputed:
             monthly_map[month_key]['received'] = Decimal(monthly_map[month_key]['received']) + amount
 
     monthly_trend: list[MonthlySummaryRow] = []
-    if confirmed_rows:
-        first_dt = confirmed_rows[0].created_at
-        last_dt = confirmed_rows[-1].created_at
+    if effective_rows:
+        first_dt = effective_rows[0].created_at
+        last_dt = effective_rows[-1].created_at
         for year, month in _month_iter(first_dt.year, first_dt.month, last_dt.year, last_dt.month):
             key = f'{year:04d}-{month:02d}'
             if key in monthly_map:

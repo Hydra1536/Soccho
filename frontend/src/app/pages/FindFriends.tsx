@@ -14,6 +14,9 @@ type SearchResult = {
   mutualFriends?: number;
   loyaltyScore?: number;
   loyalty_score?: number;
+  total_given?: number;
+  total_received?: number;
+  total_transactions?: number;
 };
 
 type SearchHistoryItem = {
@@ -199,6 +202,12 @@ export default function FindFriends() {
     const raw = person.loyaltyScore ?? person.loyalty_score ?? 0;
     const bounded = Math.max(0, Math.min(100, Number(raw) || 0));
     return bounded;
+  };
+
+  const totalVolume = (person: SearchResult) => {
+    const given = Number(person.total_given || 0);
+    const received = Number(person.total_received || 0);
+    return Math.max(0, given) + Math.max(0, received);
   };
 
   const handleAddFriend = async (person: SearchResult) => {
@@ -413,6 +422,9 @@ export default function FindFriends() {
                           />
                         </div>
                         <p className="text-xs text-[#6B7280] mt-1">Loyalty Score</p>
+                        <p className="text-xs text-[#6B7280] mt-1">
+                          Total Tx: {Number(person.total_transactions || 0).toLocaleString()} | Volume: TK {totalVolume(person).toLocaleString()}
+                        </p>
                       </div>
                     </div>
                     <button
