@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bell, Calculator } from 'lucide-react';
 import { Link } from 'react-router';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, ResponsiveContainer } from 'recharts';
 import { useApolloClient, useQuery } from '@apollo/client';
 import { GET_DASHBOARD_SUMMARY, GET_FRIEND_LEDGER } from '../../graphql/queries';
 import api, { getAccessToken } from '../../lib/api';
@@ -317,13 +317,7 @@ export default function Home() {
     }
   };
 
-  const pieData = useMemo(
-    () => [
-      { name: 'Given', value: Number(summary?.totalLent || 0), color: '#4F46E5' },
-      { name: 'Received', value: Number(summary?.totalBorrowed || 0), color: '#818CF8' },
-    ],
-    [summary]
-  );
+
 
   const barData = useMemo(() => {
     const rows = summary?.monthlyTrend || [];
@@ -379,38 +373,33 @@ export default function Home() {
           {!summary && !summaryLoading && !summaryError && (
             <p className="text-sm text-[#6B7280] mb-4">কোনো সারাংশ ডেটা পাওয়া যাচ্ছেনা, প্রথমে ট্রানজ্যাকশন করুন।</p>
           )}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <ResponsiveContainer width="100%" height={150}>
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} paddingAngle={5} dataKey="value" animationDuration={800}>
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div>
-              {barData.length > 0 ? (
-                <>
-                  <ResponsiveContainer width="100%" height={150}>
-                    <BarChart data={barData}>
-                      <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                      <Bar dataKey="given" fill="#4F46E5" radius={[4, 4, 0, 0]} animationDuration={800} />
-                      <Bar dataKey="received" fill="#818CF8" radius={[4, 4, 0, 0]} animationDuration={800} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <p className="text-center text-xs text-[#6B7280] mt-2">Monthly Trend</p>
-                  <p className="text-center text-[11px] text-[#6B7280] mt-1">Given vs Received</p>
-                </>
-              ) : (
-                <div className="h-[150px] rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] flex items-center justify-center">
-                  <p className="text-xs text-[#6B7280]">No monthly transaction data yet.</p>
+          <div>
+            {barData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={170}>
+                  <BarChart data={barData}>
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <Bar dataKey="given" stackId="stack" fill="#4F46E5" radius={[4, 4, 0, 0]} animationDuration={800} />
+                    <Bar dataKey="received" stackId="stack" fill="#818CF8" radius={[0, 0, 0, 0]} animationDuration={800} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="flex items-center justify-center gap-4 mt-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#4F46E5]" />
+                    <span className="text-xs text-[#6B7280]">Given</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#818CF8]" />
+                    <span className="text-xs text-[#6B7280]">Taken</span>
+                  </div>
                 </div>
-              )}
-            </div>
+                <p className="text-center text-xs text-[#6B7280] mt-2">Monthly Trend</p>
+              </>
+            ) : (
+              <div className="h-[170px] rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] flex items-center justify-center">
+                <p className="text-xs text-[#6B7280]">No monthly transaction data yet.</p>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-2 mt-4">
             <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 text-center">

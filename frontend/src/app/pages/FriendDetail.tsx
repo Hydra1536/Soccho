@@ -186,7 +186,7 @@ export default function FriendDetail() {
             {friendName}
           </h2>
           <p className="text-sm text-[#6B7280] mb-4">মোট হিসাব</p>
-          <p className={`text-4xl font-medium ${netBalance >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
+          <p className={`text-4xl font-medium ${pendingNet >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
             {pendingNet >= 0 ? '+' : '-'}TK {Math.abs(pendingNet).toLocaleString()}
           </p>
           <p className="text-xs text-[#6B7280] mt-2">
