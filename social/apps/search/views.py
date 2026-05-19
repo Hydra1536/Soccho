@@ -29,6 +29,19 @@ def _current_user_id(request) -> str:
     return ''
 
 
+def _context_rank(username: str, raw_query: str) -> tuple[int, int]:
+    user_clean = normalize_search_key(username)
+    query_clean = normalize_search_key(raw_query)
+
+    if user_clean == query_clean:
+        return (0, 0)
+    if user_clean.startswith(query_clean):
+        return (1, len(user_clean) - len(query_clean))
+    if query_clean in user_clean:
+        return (2, user_clean.find(query_clean))
+    return (3, 9999)
+
+
 class UserSearchView(APIView):
     def get(self, request):
         user_id = _current_user_id(request)
@@ -57,7 +70,8 @@ class UserSearchView(APIView):
             ]
 
         def run_trigram():
-            rows = list(fuzzy_search_usernames(queryset, query)[:20])
+            threshold = 0.2 if len(cleaned_query) <= 3 else 0.3
+            rows = list(fuzzy_search_usernames(queryset, query, threshold=threshold)[:30])
             return [
                 {
                     'id': str(user.id),
@@ -125,13 +139,14 @@ class UserSearchView(APIView):
 
         payload.sort(
             key=lambda row: (
+                *_context_rank(str(row.get('username') or ''), query),
                 0 if row.get('match_type') == 'exact' else 1,
                 -(row.get('similarity') or 0.0),
                 -(row.get('loyalty_score') or 0.0),
                 str(row.get('username') or '').lower(),
             )
         )
-        return JsonResponse({'results': payload})
+        return JsonResponse({'results': payload[:20]})
 
 
 class SearchHistoryView(APIView):

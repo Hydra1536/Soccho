@@ -19,11 +19,11 @@ def _redis_client() -> redis.Redis:
     return redis.from_url(settings.REDIS_CACHE_URL, decode_responses=True)
 
 
-def fuzzy_search_usernames(queryset, query: str):
+def fuzzy_search_usernames(queryset, query: str, threshold: float = 0.3):
     # pg_trgm similarity-based fuzzy search on username.
     return (
         queryset.annotate(similarity=TrigramSimilarity('username', query))
-        .filter(similarity__gt=0.3)
+        .filter(similarity__gt=threshold)
         .order_by('-similarity', 'username')
     )
 
