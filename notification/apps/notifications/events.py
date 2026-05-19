@@ -46,6 +46,8 @@ def _persist_notification(recipient_id: str, ntype: str, payload: dict):
                 'type': existing.type,
                 'payload': existing.payload,
                 'is_cleared': existing.is_cleared,
+                'is_seen': existing.is_seen,
+                'seen_at': existing.seen_at.isoformat() if existing.seen_at else None,
                 'created_at': existing.created_at.isoformat(),
             }
 
@@ -54,6 +56,7 @@ def _persist_notification(recipient_id: str, ntype: str, payload: dict):
         type=ntype,
         payload=payload,
         is_cleared=False,
+        is_seen=False,
     )
     return {
         'id': row.id,
@@ -61,6 +64,8 @@ def _persist_notification(recipient_id: str, ntype: str, payload: dict):
         'type': row.type,
         'payload': row.payload,
         'is_cleared': row.is_cleared,
+        'is_seen': row.is_seen,
+        'seen_at': row.seen_at.isoformat() if row.seen_at else None,
         'created_at': row.created_at.isoformat(),
     }
 

@@ -7,6 +7,7 @@ import pybreaker
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
+from django.utils import timezone
 
 from apps.notifications.models import Notification
 from apps.notifications.retention import cleanup_expired_notifications, retention_cutoff
@@ -57,6 +58,12 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             return
 
         action = str(payload.get('action', '')).lower()
+        if action == 'mark_seen':
+            ids = payload.get('notification_ids')
+            updated = await self._mark_seen_notifications(self.user_id, ids)
+            await self.send(text_data=json.dumps({'event': 'notification.seen', 'updated': int(updated)}))
+            return
+
         if action not in {'agree', 'disagree'}:
             await self.send(text_data=json.dumps({'error': 'Unsupported action'}))
             return
@@ -158,6 +165,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         rows = Notification.objects.filter(
             recipient_id=user_id,
             is_cleared=False,
+            is_seen=False,
             created_at__gte=retention_cutoff(),
         ).order_by('-created_at')
         return [
@@ -167,6 +175,8 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 'type': row.type,
                 'payload': row.payload,
                 'is_cleared': row.is_cleared,
+                'is_seen': row.is_seen,
+                'seen_at': row.seen_at.isoformat() if row.seen_at else None,
                 'created_at': row.created_at.isoformat(),
             }
             for row in rows
@@ -191,5 +201,21 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             'type': row.type,
             'payload': row.payload,
             'is_cleared': row.is_cleared,
+            'is_seen': row.is_seen,
+            'seen_at': row.seen_at.isoformat() if row.seen_at else None,
             'created_at': row.created_at.isoformat(),
         }
+
+    @database_sync_to_async
+    def _mark_seen_notifications(self, user_id: str, notification_ids):
+        qs = Notification.objects.filter(
+            recipient_id=user_id,
+            is_cleared=False,
+            is_seen=False,
+            created_at__gte=retention_cutoff(),
+        )
+        if isinstance(notification_ids, list) and notification_ids:
+            safe_ids = [str(item).strip() for item in notification_ids if str(item).strip().isdigit()]
+            if safe_ids:
+                qs = qs.filter(id__in=safe_ids)
+        return qs.update(is_seen=True, seen_at=timezone.now())

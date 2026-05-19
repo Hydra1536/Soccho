@@ -11,6 +11,7 @@ export interface NotificationItem {
   title: string;
   message: string;
   timestamp: string;
+  isSeen?: boolean;
   route?: string;
 }
 
@@ -54,6 +55,7 @@ type ApiNotificationRow = {
     amount?: string;
     transaction_id?: string;
   };
+  is_seen?: boolean;
   created_at?: string;
 };
 
@@ -63,38 +65,10 @@ type NotificationListResponse = {
   results: ApiNotificationRow[];
 };
 
-const SEEN_NOTIFICATION_IDS_KEY = 'seen_notification_ids';
-
-function readSeenNotificationIds(): string[] {
-  try {
-    const raw = localStorage.getItem(SEEN_NOTIFICATION_IDS_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.map((item) => String(item)).filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
-function writeSeenNotificationIds(ids: string[]) {
-  try {
-    const normalized = Array.from(new Set(ids)).slice(0, 2000);
-    localStorage.setItem(SEEN_NOTIFICATION_IDS_KEY, JSON.stringify(normalized));
-  } catch {
-    return;
-  }
-}
-
 export function NotificationDrawer({ isOpen, onClose, notifications, onNotificationsChange, onUnreadCountChange }: NotificationDrawerProps) {
   const navigate = useNavigate();
   const wsRef = useRef<WebSocket | null>(null);
   const isOpenRef = useRef<boolean>(isOpen);
-  const seenIdsRef = useRef<string[]>(readSeenNotificationIds());
   const notificationsRef = useRef<NotificationItem[]>(notifications);
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -163,6 +137,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
             : 'You have a new notification.'),
       timestamp: row.created_at || new Date().toISOString(),
       route: isFriendRequest || isFriendAccepted ? '/friends' : undefined,
+      isSeen: !!row.is_seen,
     };
   };
 
@@ -193,6 +168,9 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
         ? dedupeById([...notificationsRef.current, ...mapped])
         : dedupeById(mapped);
       onNotificationsChange?.(nextItems);
+      if (!isOpenRef.current) {
+        setUnseenIds(nextItems.filter((item) => !item.isSeen).map((item) => item.dedupeKey || item.id));
+      }
       setNextCursor(extractCursor(data?.next || null));
       setShowMoreButton(false);
     } catch {
@@ -209,26 +187,28 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     }
   };
 
+  const markSeen = async (ids?: string[]) => {
+    try {
+      const payload = ids && ids.length ? { ids } : {};
+      await api.post('/api/notification/mark-seen/', payload);
+    } catch {
+      return;
+    }
+  };
+
   useEffect(() => {
     if (!isOpen) {
       return;
     }
-    const currentIds = notificationsRef.current.map((item) => item.dedupeKey || item.id);
-    const mergedSeen = Array.from(new Set([...seenIdsRef.current, ...currentIds]));
-    seenIdsRef.current = mergedSeen;
-    writeSeenNotificationIds(mergedSeen);
+    const unseenRows = notificationsRef.current.filter((item) => !item.isSeen);
+    const unseenIdsToMark = unseenRows.map((item) => item.id).filter(Boolean);
+    if (unseenIdsToMark.length) {
+      void markSeen(unseenIdsToMark);
+    }
+    onNotificationsChange?.(notificationsRef.current.map((item) => ({ ...item, isSeen: true })));
     setUnseenIds([]);
     void fetchNotificationPage(null, false);
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen || notifications.length === 0) {
-      return;
-    }
-    const mergedSeen = Array.from(new Set([...seenIdsRef.current, ...notifications.map((item) => item.dedupeKey || item.id)]));
-    seenIdsRef.current = mergedSeen;
-    writeSeenNotificationIds(mergedSeen);
-  }, [isOpen, notifications]);
 
   useEffect(() => {
     let cancelled = false;
@@ -274,6 +254,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
           const payload = JSON.parse(event.data);
           if (payload?.event === 'notification.cleared' && payload?.notification_id) {
             onNotificationsChange?.(notificationsRef.current.filter((item) => item.id !== String(payload.notification_id)));
+            setUnseenIds((prev) => prev.filter((id) => id !== String(payload.notification_id)));
             return;
           }
           if (
@@ -288,13 +269,13 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
               id: row.id,
               type: row.type || payload?.event || '',
               payload: row.payload || {},
+              is_seen: !!row.is_seen,
               created_at: row.created_at,
             });
             onNotificationsChange?.(dedupeById([item, ...notificationsRef.current]));
             if (!isOpenRef.current) {
               const key = item.dedupeKey || item.id;
-              const alreadySeen = seenIdsRef.current.includes(key);
-              if (alreadySeen) {
+              if (item.isSeen) {
                 return;
               }
               setUnseenIds((prev) => {
@@ -355,6 +336,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
 
     if (action === 'agree') {
       onNotificationsChange?.(notificationsRef.current.filter((n) => n.id !== id));
+      setUnseenIds((prev) => prev.filter((itemId) => itemId !== id));
     }
   };
 

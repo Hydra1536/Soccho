@@ -170,11 +170,10 @@ export function EqualPayDrawer({ isOpen, onClose }: EqualPayDrawerProps) {
             <div className="p-4 space-y-4">
               <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl p-3 text-sm text-[#374151]">
                 <p>
-                  একসাথে ঘোরাঘুরি বা খাওয়া-দাওয়ার খরচ সমানভাবে ভাগ করা নিয়ে চিন্তিত? কে কত টাকা ফেরত
+                  কে কত টাকা ফেরত
                   পাবে বা কাকে কত দিতে হবে, তার একটি পরিষ্কার তালিকা পেতে সবার নাম এবং কে কত খরচ করেছে তা
-                  যোগ করুন।
+                  যোগ করুন। ✨
                 </p>
-                <p className="mt-2">আড্ডা হবে প্রাণখুলে, আর হিসাব হবে Soccho-তে!✨</p>
               </div>
 
               <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
