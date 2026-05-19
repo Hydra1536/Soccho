@@ -6,6 +6,7 @@ import { BottomNav } from '../components/BottomNav';
 import { fetchCurrentUser, logout } from '../../lib/auth';
 import api, { EMAIL_KEY, USERNAME_KEY, getApiErrorMessage } from '../../lib/api';
 
+
 export default function Profile() {
   const navigate = useNavigate();
   const [userName, setUserName] = useState(localStorage.getItem(USERNAME_KEY) || '');
@@ -109,6 +110,26 @@ export default function Profile() {
               <span className="flex-1 text-left text-[#111827]">Change Password</span>
             </button>
           )}
+
+          <button
+            onClick={async () => {
+              const ok = window.confirm('Delete your account? This cannot be undone.');
+              if (!ok) {
+                return;
+              }
+              try {
+                await api.post('/api/auth/delete-account/', {});
+                await logout();
+                navigate('/');
+              } catch {
+                setProfileError('Unable to delete account right now. Please try again.');
+              }
+            }}
+            className="w-full px-4 py-4 flex items-center gap-3 hover:bg-[#FEF2F2] transition-colors border-t border-[#E5E7EB]"
+          >
+            <span className="flex-1 text-left text-[#DC2626] font-medium">Delete Account</span>
+          </button>
+
           <button onClick={handleLogout} className="w-full px-4 py-4 flex items-center gap-3 hover:bg-[#FEE2E2] transition-colors">
             <LogOut size={20} className="text-[#EF4444]" />
             <span className="flex-1 text-left text-[#EF4444]">Log Out</span>

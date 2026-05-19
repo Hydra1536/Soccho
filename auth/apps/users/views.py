@@ -588,6 +588,35 @@ class HealthView(PublicEndpointMixin, APIView):
         return Response({"status": "ok"}, status=status.HTTP_200_OK)
 
 
+class DeleteAccountView(PublicEndpointMixin, APIView):
+    def post(self, request):
+        try:
+            user = _get_authenticated_user(request)
+        except AuthStorageError:
+            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        if user is None:
+            return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Best-effort: other services (social/transaction/notification) keep their own
+        # data tables keyed by UUIDs. We soft-delete/clean up where possible.
+        try:
+            # Social friendships are in the social service; transaction rows are soft-deletable.
+            # Those services should rely on their FK cascades OR periodic cleanup.
+            # Here we at least revoke auth tokens so the user cannot be used further.
+            RefreshToken.objects.filter(user=user).update(is_revoked=True)
+        except Exception:
+            # Don't fail account deletion on token revocation issues.
+            pass
+
+        try:
+            user.delete()
+        except Exception:
+            return Response({"detail": "Unable to delete account"}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class GoogleOAuthView(PublicEndpointMixin, APIView):
     def post(self, request):
         id_token = request.data.get("id_token")

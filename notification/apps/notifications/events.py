@@ -20,7 +20,7 @@ def _map_event_to_notification(channel: str, payload: dict):
         ntype = Notification.TYPE_FRIEND_REQUEST
     elif channel == 'friend.accepted':
         ntype = Notification.TYPE_FRIEND_ACCEPTED
-    elif channel == 'transaction.confirmed':
+    elif channel in {'transaction.confirmed', 'transaction.denied'}:
         ntype = Notification.TYPE_PAYMENT_ACK
     else:
         ntype = Notification.TYPE_DUE_REMINDER
@@ -73,7 +73,7 @@ def _persist_notification(recipient_id: str, ntype: str, payload: dict):
 async def run_pubsub_listener():
     client = redis.from_url(settings.REDIS_CACHE_URL, decode_responses=True)
     pubsub = client.pubsub()
-    await pubsub.subscribe('transaction.created', 'transaction.confirmed', 'transaction.due_reminder', 'friend.request', 'friend.accepted')
+    await pubsub.subscribe('transaction.created', 'transaction.confirmed', 'transaction.denied', 'transaction.due_reminder', 'friend.request', 'friend.accepted')
 
     layer = get_channel_layer()
     last_cleanup_epoch = 0.0

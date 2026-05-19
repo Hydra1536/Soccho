@@ -410,7 +410,7 @@ export default function FindFriends() {
                     }
                   }}
                 >
-                  <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3">
                     <Avatar name={person.username || person.name || `Friend ${idx + 1}`} size="medium" />
                     <div className="flex-1">
                       <h3 className="font-medium text-[#111827]">{person.username || person.name || `Friend ${idx + 1}`}</h3>
@@ -423,7 +423,7 @@ export default function FindFriends() {
                         </div>
                         <p className="text-xs text-[#6B7280] mt-1">Loyalty Score</p>
                         <p className="text-xs text-[#6B7280] mt-1">
-                          Total Tx: {Number(person.total_transactions || 0).toLocaleString()} | Volume: TK {totalVolume(person).toLocaleString()}
+                          Total Tx: {Number((person.total_transactions ?? person.totalTransactions) || 0).toLocaleString()} | Volume: TK {totalVolume(person).toLocaleString()}
                         </p>
                       </div>
                     </div>

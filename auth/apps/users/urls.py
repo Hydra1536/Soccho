@@ -9,7 +9,9 @@ from apps.users.views import (
     MeView,
     RefreshView,
     RegisterView,
+    DeleteAccountView,
 )
+
 
 urlpatterns = [
     path("health/", HealthView.as_view(), name="health"),
@@ -21,4 +23,5 @@ urlpatterns = [
     path("forgot-password/", ForgotPasswordView.as_view(), name="forgot-password"),
     path("change-password/request/", ChangePasswordView.as_view(), name="change-password-request"),
     path("change-password/", ChangePasswordView.as_view(), name="change-password"),
+    path("delete-account/", DeleteAccountView.as_view(), name="delete-account"),
 ]

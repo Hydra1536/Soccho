@@ -96,6 +96,7 @@ class UserSearchView(APIView):
             payload.append(
                 {
                     'id': row['id'],
+                    'user_id': row['id'],
                     'username': row['username'],
                     'match_type': row['match_type'],
                     'similarity': row['similarity'],

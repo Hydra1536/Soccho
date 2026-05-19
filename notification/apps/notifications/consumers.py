@@ -84,11 +84,8 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({'error': 'Service Unavailable'}))
             return
 
-        if action == 'agree':
-            await self._clear_notification(str(notification_id), self.user_id)
-            await self.send(text_data=json.dumps({'event': 'notification.cleared', 'notification_id': str(notification_id)}))
-        else:
-            await self.send(text_data=json.dumps({'event': 'notification.disagreed', 'notification_id': str(notification_id)}))
+        await self._clear_notification(str(notification_id), self.user_id)
+        await self.send(text_data=json.dumps({'event': 'notification.cleared', 'notification_id': str(notification_id)}))
 
     async def broadcast_notification(self, event):
         await self.send(text_data=json.dumps({'event': event['event'], 'notification': event['notification']}))

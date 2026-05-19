@@ -79,6 +79,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
   const [showMoreButton, setShowMoreButton] = useState(false);
   const [unseenIds, setUnseenIds] = useState<string[]>(() => []);
 
+
   useEffect(() => {
     notificationsRef.current = notifications;
   }, [notifications]);
@@ -87,7 +88,12 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     isOpenRef.current = isOpen;
   }, [isOpen]);
 
-  const unreadCount = useMemo(() => (isOpen ? 0 : unseenIds.length), [isOpen, unseenIds.length]);
+  const unreadCount = useMemo(() => {
+    if (isOpen) return 0;
+    // Badge must always reflect server-provided unseen state (is_seen).
+    // `unseenIds` can lag; derive from current notification rows.
+    return notificationsRef.current.filter((n) => !n.isSeen).length;
+  }, [isOpen, notifications]);
 
   useEffect(() => {
     onUnreadCountChange?.(unreadCount);
@@ -252,7 +258,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       ws.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
-          if (payload?.event === 'notification.cleared' && payload?.notification_id) {
+          if ((payload?.event === 'notification.cleared' || payload?.event === 'notification.disagreed') && payload?.notification_id) {
             onNotificationsChange?.(notificationsRef.current.filter((item) => item.id !== String(payload.notification_id)));
             setUnseenIds((prev) => prev.filter((id) => id !== String(payload.notification_id)));
             return;
@@ -334,10 +340,8 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify({ action, notification_id: id }));
 
-    if (action === 'agree') {
-      onNotificationsChange?.(notificationsRef.current.filter((n) => n.id !== id));
-      setUnseenIds((prev) => prev.filter((itemId) => itemId !== id));
-    }
+    onNotificationsChange?.(notificationsRef.current.filter((n) => n.id !== id));
+    setUnseenIds((prev) => prev.filter((itemId) => itemId !== id));
   };
 
   const getIcon = (type: NotificationItem['type']) => {

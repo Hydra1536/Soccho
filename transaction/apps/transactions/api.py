@@ -91,6 +91,9 @@ def confirm_transaction(request: HttpRequest, transaction_id: str, payload: Conf
     _publish('transaction.confirmed', {
         'transaction_id': str(tx.id),
         'friendship_id': str(tx.friendship_id),
+        'recipient_id': str(tx.lender_id),
+        'borrower_id': str(tx.borrower_id),
+        'lender_id': str(tx.lender_id),
         'new_version': balance.version,
         'net_balance': str(balance.net_balance),
         'amount': str(tx.amount),
@@ -126,10 +129,11 @@ def resolve_transaction(request: HttpRequest, transaction_id: str, payload: Reso
             _publish('transaction.confirmed', {
                 'transaction_id': str(tx.id),
                 'friendship_id': str(tx.friendship_id),
-                'new_version': balance.version,
-                'net_balance': str(balance.net_balance),
+                'recipient_id': str(tx.lender_id),
                 'borrower_id': str(tx.borrower_id),
                 'lender_id': str(tx.lender_id),
+                'new_version': balance.version,
+                'net_balance': str(balance.net_balance),
                 'amount': str(tx.amount),
                 'title': 'Payment confirmed',
                 'body': f'Payment of ৳{tx.amount} was confirmed.',
@@ -137,6 +141,16 @@ def resolve_transaction(request: HttpRequest, transaction_id: str, payload: Reso
             return 200, tx
 
         tx = mark_denied(tx)
+        _publish('transaction.denied', {
+            'transaction_id': str(tx.id),
+            'friendship_id': str(tx.friendship_id),
+            'recipient_id': str(tx.lender_id),
+            'borrower_id': str(tx.borrower_id),
+            'lender_id': str(tx.lender_id),
+            'amount': str(tx.amount),
+            'title': 'Payment request denied',
+            'body': f'Payment request of ৳{tx.amount} was denied.',
+        })
         return 200, tx
 
 
