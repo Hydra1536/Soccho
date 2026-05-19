@@ -1,10 +1,13 @@
 import json
+import re
 import time
 from typing import Any
 
 import redis
 from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Q
+from django.db.models import Value
+from django.db.models.functions import Lower, Replace
 
 from django.conf import settings
 
@@ -19,13 +22,27 @@ def fuzzy_search_usernames(queryset, query: str):
     # pg_trgm similarity-based fuzzy search on username.
     return (
         queryset.annotate(similarity=TrigramSimilarity('username', query))
-        .filter(similarity__gte=0.2)
+        .filter(similarity__gt=0.3)
         .order_by('-similarity', 'username')
     )
 
 
 def fallback_search_usernames(queryset, query: str):
     return queryset.filter(username__icontains=query).order_by('username')
+
+
+def normalize_search_key(value: str) -> str:
+    return re.sub(r'[_-]+', '', value.strip().lower())
+
+
+def exact_key_search_usernames(queryset, query: str):
+    cleaned_query = normalize_search_key(query)
+    normalized_username = Replace(
+        Replace(Lower('username'), Value('_'), Value('')),
+        Value('-'),
+        Value(''),
+    )
+    return queryset.annotate(search_key=normalized_username).filter(search_key=cleaned_query).order_by('username')
 
 
 def save_search_history(user_id: str, query: str) -> None:

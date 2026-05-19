@@ -12,4 +12,4 @@ COPY . /app
 
 EXPOSE 8003
 
-CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn transaction_service.wsgi --bind 0.0.0.0:${PORT:-8003}"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn transaction_service.wsgi:application --bind 0.0.0.0:${PORT:-10000} --workers ${WEB_CONCURRENCY:-2} --timeout ${GUNICORN_TIMEOUT:-120} --access-logfile - --error-logfile -"]
