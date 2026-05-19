@@ -60,6 +60,7 @@ export default function FindFriends() {
   const [acceptedFriendships, setAcceptedFriendships] = useState<Record<string, string>>({});
   const [requestInFlight, setRequestInFlight] = useState<Record<string, boolean>>({});
   const [incomingRequests, setIncomingRequests] = useState<PendingRequestRow[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<PendingRequestRow[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [pendingActionInFlight, setPendingActionInFlight] = useState<Record<string, boolean>>({});
 
@@ -118,8 +119,10 @@ export default function FindFriends() {
       }, {});
       setRequestedUserIds(outgoingMap);
       setIncomingRequests(incoming);
+      setOutgoingRequests(outgoing);
     } catch {
       setIncomingRequests([]);
+      setOutgoingRequests([]);
     } finally {
       setPendingLoading(false);
     }
@@ -254,6 +257,30 @@ export default function FindFriends() {
     return 'Unable to send friend request right now.';
   };
 
+  const handleWithdrawRequest = async (requestRow: PendingRequestRow) => {
+    const addresseeId = String(requestRow.counterpart_id || requestRow.addressee_id || '').trim();
+    const requestId = String(requestRow.id || '').trim();
+    if (!addresseeId || !requestId) {
+      return;
+    }
+
+    setPendingActionInFlight((prev) => ({ ...prev, [requestId]: true }));
+    setSearchErrorMessage('');
+    try {
+      await api.post('/api/social/withdraw-request/', { user_id: addresseeId });
+      setOutgoingRequests((prev) => prev.filter((row) => String(row.id) !== requestId));
+      setRequestedUserIds((prev) => {
+        const next = { ...prev };
+        delete next[addresseeId];
+        return next;
+      });
+    } catch (error) {
+      setSearchErrorMessage(getErrorMessage(error));
+    } finally {
+      setPendingActionInFlight((prev) => ({ ...prev, [requestId]: false }));
+    }
+  };
+
   const handleIncomingAction = async (requestRow: PendingRequestRow, action: 'accept' | 'reject') => {
     const requesterId = String(requestRow.counterpart_id || requestRow.requester_id || '').trim();
     if (!requesterId) {
@@ -294,6 +321,40 @@ export default function FindFriends() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-6 space-y-6">
+        <div>
+          <h2 className="font-bold text-lg mb-3" style={{ fontFamily: 'var(--font-display)' }}>
+            Outgoing Requests
+          </h2>
+          {pendingLoading && <p className="text-sm text-[#6B7280] mb-3">Loading requests...</p>}
+          {!pendingLoading && outgoingRequests.length === 0 && <p className="text-sm text-[#6B7280] mb-3">No outgoing requests.</p>}
+          <div className="space-y-3">
+            {outgoingRequests.map((row, idx) => {
+              const requestId = String(row.id || '');
+              const isActing = !!pendingActionInFlight[requestId];
+              return (
+                <div key={requestId || idx} className="bg-white rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={row.counterpart_username || 'User'} size="medium" />
+                    <div className="flex-1">
+                      <h3 className="font-medium text-[#111827]">{row.counterpart_username || 'Unknown user'}</h3>
+                      <p className="text-xs text-[#6B7280]">Friend request sent</p>
+                    </div>
+                    <button
+                      onClick={() => void handleWithdrawRequest(row)}
+                      disabled={isActing}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        isActing ? 'bg-[#A5B4FC] text-white' : 'bg-[#EF4444] text-white hover:bg-[#DC2626]'
+                      }`}
+                    >
+                      {isActing ? 'Cancelling...' : 'Cancel'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div>
           <h2 className="font-bold text-lg mb-3" style={{ fontFamily: 'var(--font-display)' }}>
             Incoming Requests

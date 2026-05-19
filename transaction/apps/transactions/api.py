@@ -29,8 +29,11 @@ def _requester_id(request: HttpRequest) -> str:
     return str(request.headers.get('x-user-id', '')).strip()
 
 
-@router.post('/', response={201: TransactionOut, 200: TransactionOut, 409: dict})
+@router.post('/', response={201: TransactionOut, 200: TransactionOut, 400: dict, 409: dict})
 def create_transaction(request: HttpRequest, payload: TransactionCreateIn):
+    if payload.amount <= 0:
+        return 400, {'detail': 'Amount must be a positive integer'}
+
     client = _redis_client()
     lock_key = f"idempotency:transaction:create:{payload.idempotency_key}"
 
@@ -48,9 +51,14 @@ def create_transaction(request: HttpRequest, payload: TransactionCreateIn):
             friendship_id=payload.friendship_id,
             amount=payload.amount,
             due_date=payload.due_date,
+            note=payload.note,
             idempotency_key=payload.idempotency_key,
             status=Transaction.STATUS_PENDING,
         )
+
+    body_text = f"A payment request of ৳{tx.amount} needs your approval."
+    if tx.note:
+        body_text += f" Note: {tx.note}"
 
     _publish('transaction.created', {
         'transaction_id': str(tx.id),
@@ -59,8 +67,9 @@ def create_transaction(request: HttpRequest, payload: TransactionCreateIn):
         'borrower_id': str(tx.borrower_id),
         'amount': str(tx.amount),
         'due_date': str(tx.due_date),
+        'note': str(tx.note) if tx.note else None,
         'title': 'Payment confirmation needed',
-        'body': f"A payment request of ৳{tx.amount} needs your approval.",
+        'body': body_text,
     })
     return 201, tx
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowUp, ArrowDown } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router';
 import { motion } from 'motion/react';
@@ -54,6 +54,7 @@ export default function FriendDetail() {
   const navigate = useNavigate();
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [unfriendLoading, setUnfriendLoading] = useState(false);
   const [apiError, setApiError] = useState('');
@@ -116,9 +117,15 @@ export default function FriendDetail() {
     setApiError('এই মুহূর্তে বন্ধুর হিসাব লোড করা যাচ্ছে না।');
   }, [ledgerError, previousLedgerData]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!id || !friendUserId) return;
+
+    const normalizedAmount = amount.trim();
+    if (!/^[1-9]\d*$/.test(normalizedAmount)) {
+      setApiError('অনুগ্রহ করে একটি সঠিক পূর্ণসংখ্যা টাকার পরিমাণ লিখুন।');
+      return;
+    }
 
     setLoading(true);
     setApiError('');
@@ -127,12 +134,14 @@ export default function FriendDetail() {
         lender_id: myId,
         borrower_id: friendUserId,
         friendship_id: ledgerFriendshipId,
-        amount: Number(amount),
+        amount: Number(normalizedAmount),
         due_date: dueDate || null,
+        note: note.trim() || null,
         idempotency_key: crypto.randomUUID(),
       });
       setAmount('');
       setDueDate('');
+      setNote('');
     } catch {
       setApiError('ট্রানজ্যাকশন জমা দেওয়া যায়নি। আবার চেষ্টা করুন।');
     } finally {
@@ -226,7 +235,11 @@ export default function FriendDetail() {
                   TK
                 </span>
                 <input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   type="number"
+                  step="1"
+                  min="1"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0"
@@ -237,6 +250,7 @@ export default function FriendDetail() {
               </div>
             </div>
 
+            <Input type="text" label="নোট (ঐচ্ছিক)" value={note} onChange={(e) => setNote(e.target.value)} />
             <Input type="date" label="শেষ তারিখ (ঐচ্ছিক)" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             <Button type="submit" fullWidth className="mt-6" disabled={loading || !friendUserId}>
               {loading ? 'জমা হচ্ছে...' : 'Submit'}
@@ -268,10 +282,9 @@ export default function FriendDetail() {
                         <p className={`text-lg font-medium ${isGave ? 'text-[#EF4444]' : 'text-[#10B981]'}`} style={{ fontFamily: 'var(--font-mono)' }}>
                           {isGave ? '-' : '+'}TK {Number(transaction.amount).toLocaleString()}
                         </p>
-                        <StatusChip status={transaction.status} />
                       </div>
                       <p className="text-xs text-[#9CA3AF]">
-                        {transaction.due_date ? new Date(transaction.due_date).toLocaleDateString('en-GB') : 'শেষ তারিখ নেই'}
+                        {transaction.due_date ? new Date(transaction.due_date).toLocaleDateString('en-GB') : 'No date set'}
                       </p>
                     </div>
                   </div>

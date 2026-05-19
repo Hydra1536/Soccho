@@ -212,6 +212,30 @@ class RejectRequestView(APIView):
         return Response(FriendshipSerializer(friendship).data, status=status.HTTP_200_OK)
 
 
+class WithdrawRequestView(APIView):
+    def post(self, request):
+        serializer = FriendshipActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        current_user_id = _current_user_id(request)
+        if current_user_id is None:
+            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+        addressee_id = serializer.validated_data['user_id']
+        if current_user_id == addressee_id:
+            return Response({'detail': 'Cannot withdraw your own request'}, status=status.HTTP_400_BAD_REQUEST)
+
+        friendship = Friendship.objects.filter(
+            requester_id=current_user_id,
+            addressee_id=addressee_id,
+            status=Friendship.STATUS_PENDING,
+        ).first()
+        if friendship is None:
+            return Response({'detail': 'Outgoing friend request not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        friendship.delete()
+        return Response({'detail': 'Friend request withdrawn'}, status=status.HTTP_200_OK)
+
+
 class ListFriendsView(APIView):
     pagination_class = FriendshipCursorPagination
 

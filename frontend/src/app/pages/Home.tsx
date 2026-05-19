@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bell, Calculator } from 'lucide-react';
 import { Link } from 'react-router';
-import { BarChart, Bar, XAxis, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useApolloClient, useQuery } from '@apollo/client';
 import { GET_DASHBOARD_SUMMARY, GET_FRIEND_LEDGER } from '../../graphql/queries';
 import api, { getAccessToken } from '../../lib/api';
@@ -379,6 +379,7 @@ export default function Home() {
                 <ResponsiveContainer width="100%" height={170}>
                   <BarChart data={barData}>
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(value: number) => [`TK ${value.toLocaleString()}`, 'Amount']} cursor={{ fill: 'rgba(79,70,229,0.08)' }} />
                     <Bar dataKey="given" stackId="stack" fill="#4F46E5" radius={[4, 4, 0, 0]} animationDuration={800} />
                     <Bar dataKey="received" stackId="stack" fill="#818CF8" radius={[0, 0, 0, 0]} animationDuration={800} />
                   </BarChart>

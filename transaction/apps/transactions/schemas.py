@@ -9,8 +9,9 @@ class TransactionCreateIn(Schema):
     lender_id: uuid.UUID
     borrower_id: uuid.UUID
     friendship_id: uuid.UUID
-    amount: Decimal
+    amount: int
     due_date: date | None = None
+    note: str | None = None
     idempotency_key: str
 
 
@@ -21,6 +22,7 @@ class TransactionOut(Schema):
     friendship_id: uuid.UUID
     amount: Decimal
     due_date: date | None = None
+    note: str | None = None
     status: str
     idempotency_key: str
 

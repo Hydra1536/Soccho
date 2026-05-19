@@ -45,6 +45,12 @@ def compute_loyalty_score(user_id: str, rows: list[Transaction]) -> float:
     total_lent = sum((Decimal(row.amount) for row in confirmed_rows if str(row.lender_id) == user_id), start=Decimal('0'))
     total_borrowed = sum((Decimal(row.amount) for row in confirmed_rows if str(row.borrower_id) == user_id), start=Decimal('0'))
 
+    unique_confirmed_counterparts = {
+        str(row.borrower_id) if str(row.lender_id) == user_id else str(row.lender_id)
+        for row in confirmed_rows
+        if str(row.lender_id) == user_id or str(row.borrower_id) == user_id
+    }
+
     borrow_rows = [row for row in rows if str(row.borrower_id) == user_id]
     confirmed_borrow_rows = [row for row in borrow_rows if row.status == Transaction.STATUS_CONFIRMED]
     due_borrow_rows = [row for row in confirmed_borrow_rows if row.due_date is not None]
@@ -71,6 +77,7 @@ def compute_loyalty_score(user_id: str, rows: list[Transaction]) -> float:
     else:
         lend_component = 0.5
 
+    network_diversity = min(1.0, len(unique_confirmed_counterparts) / 10.0)
     today = date.today()
     overdue_pending = [
         row
@@ -81,9 +88,10 @@ def compute_loyalty_score(user_id: str, rows: list[Transaction]) -> float:
     activity = min(1.0, len(confirmed_rows) / 20.0)
 
     score = 100.0 * (
-        0.45 * on_time_rate
-        + 0.30 * lend_component
+        0.40 * on_time_rate
+        + 0.25 * lend_component
         + 0.20 * completion_rate
+        + 0.10 * network_diversity
         + 0.05 * activity
     )
     score -= 20.0 * overdue_penalty
@@ -121,30 +129,36 @@ def compute_dashboard_summary(user_id: str) -> DashboardSummaryComputed:
             monthly_map[month_key]['received'] = Decimal(monthly_map[month_key]['received']) + amount
 
     monthly_trend: list[MonthlySummaryRow] = []
-    if effective_rows:
-        first_dt = effective_rows[0].created_at
-        last_dt = effective_rows[-1].created_at
-        for year, month in _month_iter(first_dt.year, first_dt.month, last_dt.year, last_dt.month):
-            key = f'{year:04d}-{month:02d}'
-            if key in monthly_map:
-                row = monthly_map[key]
-                monthly_trend.append(
-                    MonthlySummaryRow(
-                        month_key=str(row['month_key']),
-                        label=str(row['label']),
-                        given=float(Decimal(row['given'])),
-                        received=float(Decimal(row['received'])),
-                    )
+    today = date.today()
+    end_year = today.year
+    end_month = today.month
+    start_year = end_year
+    start_month = end_month - 11
+    if start_month <= 0:
+        start_year -= 1
+        start_month += 12
+
+    for year, month in _month_iter(start_year, start_month, end_year, end_month):
+        key = f'{year:04d}-{month:02d}'
+        if key in monthly_map:
+            row = monthly_map[key]
+            monthly_trend.append(
+                MonthlySummaryRow(
+                    month_key=str(row['month_key']),
+                    label=str(row['label']),
+                    given=float(Decimal(row['given'])),
+                    received=float(Decimal(row['received'])),
                 )
-            else:
-                monthly_trend.append(
-                    MonthlySummaryRow(
-                        month_key=key,
-                        label=date(year, month, 1).strftime('%b %y'),
-                        given=0.0,
-                        received=0.0,
-                    )
+            )
+        else:
+            monthly_trend.append(
+                MonthlySummaryRow(
+                    month_key=key,
+                    label=date(year, month, 1).strftime('%b %y'),
+                    given=0.0,
+                    received=0.0,
                 )
+            )
 
     loyalty_score = compute_loyalty_score(user_id, rows)
 

@@ -265,6 +265,8 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
           }
           if (
             payload?.event === 'transaction.created'
+            || payload?.event === 'transaction.confirmed'
+            || payload?.event === 'transaction.denied'
             || payload?.event === 'notification.push'
             || payload?.event === 'notification.pending'
             || payload?.event === 'friend.request'
@@ -336,7 +338,8 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
     };
   }, [onNotificationsChange]);
 
-  const handleAction = (id: string, action: 'agree' | 'disagree') => {
+  const handleAction = (event: MouseEvent<HTMLButtonElement>, id: string, action: 'agree' | 'disagree') => {
+    event.stopPropagation();
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify({ action, notification_id: id }));
 
@@ -444,10 +447,10 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
 
                       {notification.type === 'pending' && (
                         <div className="flex gap-2 mt-3">
-                          <button onClick={() => handleAction(notification.id, 'agree')} className="px-3 py-1.5 bg-[#10B981] text-white text-sm rounded-lg hover:bg-[#059669] transition-colors">
+                          <button onClick={(event) => handleAction(event, notification.id, 'agree')} className="px-3 py-1.5 bg-[#10B981] text-white text-sm rounded-lg hover:bg-[#059669] transition-colors">
                             Agree
                           </button>
-                          <button onClick={() => handleAction(notification.id, 'disagree')} className="px-3 py-1.5 bg-[#EF4444] text-white text-sm rounded-lg hover:bg-[#DC2626] transition-colors">
+                          <button onClick={(event) => handleAction(event, notification.id, 'disagree')} className="px-3 py-1.5 bg-[#EF4444] text-white text-sm rounded-lg hover:bg-[#DC2626] transition-colors">
                             Disagree
                           </button>
                         </div>
