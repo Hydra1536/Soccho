@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, LogOut, Lock } from 'lucide-react';
+import { ArrowLeft, LogOut, Lock, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { Avatar } from '../components/Avatar';
 import { BottomNav } from '../components/BottomNav';
 import { fetchCurrentUser, logout } from '../../lib/auth';
 import api, { EMAIL_KEY, USERNAME_KEY, getApiErrorMessage } from '../../lib/api';
+
+type PendingVerificationRow = {
+  id: string;
+  friendship_id: string;
+  friendship_route_id?: string;
+  amount: string;
+  due_date?: string | null;
+  note?: string;
+  lender_name?: string;
+};
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -13,6 +23,17 @@ export default function Profile() {
   const [profileError, setProfileError] = useState('');
   const [canChangePassword, setCanChangePassword] = useState(false);
   const [loyaltyScore, setLoyaltyScore] = useState<number>(0);
+  const [pendingVerifications, setPendingVerifications] = useState<PendingVerificationRow[]>([]);
+  const [actingId, setActingId] = useState('');
+
+  const loadPendingVerifications = async () => {
+    try {
+      const { data } = await api.get<{ results?: PendingVerificationRow[] }>('/api/transactions/pending-verifications/');
+      setPendingVerifications(Array.isArray(data?.results) ? data.results : []);
+    } catch {
+      setPendingVerifications([]);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -23,7 +44,6 @@ export default function Profile() {
         if (!isMounted) {
           return;
         }
-
         setUserName(profile.username);
         setUserEmail(profile.email);
         setCanChangePassword(profile.has_password);
@@ -32,7 +52,6 @@ export default function Profile() {
         if (!isMounted) {
           return;
         }
-
         setProfileError(getApiErrorMessage(error, 'Unable to load profile details right now.'));
       }
     };
@@ -44,8 +63,7 @@ export default function Profile() {
           return;
         }
         const raw = Number(data?.loyalty_score ?? 0);
-        const bounded = Math.max(0, Math.min(100, Number.isFinite(raw) ? raw : 0));
-        setLoyaltyScore(bounded);
+        setLoyaltyScore(Math.max(0, Math.min(100, Number.isFinite(raw) ? raw : 0)));
       } catch {
         if (!isMounted) {
           return;
@@ -56,11 +74,28 @@ export default function Profile() {
 
     void loadProfile();
     void loadLoyaltyScore();
+    void loadPendingVerifications();
 
     return () => {
       isMounted = false;
     };
   }, []);
+
+  const handleResolve = async (transactionId: string, action: 'agree' | 'disagree') => {
+    const userId = localStorage.getItem('user_id') || '';
+    setActingId(transactionId);
+    try {
+      await api.post(`/api/transactions/${transactionId}/resolve/`, {
+        borrower_id: userId,
+        action,
+      });
+      await loadPendingVerifications();
+    } catch (error) {
+      setProfileError(getApiErrorMessage(error, `Unable to ${action} this transaction right now.`));
+    } finally {
+      setActingId('');
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -97,6 +132,50 @@ export default function Profile() {
             <p className="text-sm text-[#111827] mt-2 font-medium">{loyaltyScore.toFixed(1)} / 100</p>
           </div>
           {profileError && <p className="mt-3 text-sm text-[#EF4444]">{profileError}</p>}
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <ShieldCheck size={18} className="text-[#B45309]" />
+            <h3 className="font-bold text-lg" style={{ fontFamily: 'var(--font-display)' }}>
+              Pending Verifications
+            </h3>
+          </div>
+          <div className="space-y-3">
+            {pendingVerifications.map((item) => {
+              const isActing = actingId === item.id;
+              return (
+                <div key={item.id} className="rounded-2xl border border-[#FCD34D] bg-[#FFFBEB] p-4">
+                  <p className="text-sm font-semibold text-[#92400E]">{item.lender_name || 'A friend'} logged TK {Number(item.amount || 0).toLocaleString()}</p>
+                  <p className="text-xs text-[#92400E] mt-1">Due: {item.due_date ? new Date(item.due_date).toLocaleDateString('en-GB') : 'No due date'}</p>
+                  {item.note && <p className="text-sm text-[#78350F] mt-2">{item.note}</p>}
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => void handleResolve(item.id, 'agree')}
+                      disabled={isActing}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium ${isActing ? 'bg-[#A7F3D0] text-[#065F46]' : 'bg-[#10B981] text-white hover:bg-[#059669]'}`}
+                    >
+                      Agree
+                    </button>
+                    <button
+                      onClick={() => void handleResolve(item.id, 'disagree')}
+                      disabled={isActing}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium ${isActing ? 'bg-[#FECACA] text-[#991B1B]' : 'bg-[#EF4444] text-white hover:bg-[#DC2626]'}`}
+                    >
+                      Disagree
+                    </button>
+                    <button
+                      onClick={() => navigate(`/friend/${item.friendship_route_id || item.friendship_id}?tab=verifications`)}
+                      className="px-3 py-2 rounded-lg text-sm font-medium bg-[#111827] text-white hover:bg-black"
+                    >
+                      Open friend profile
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {pendingVerifications.length === 0 && <p className="text-sm text-[#6B7280]">No pending transaction verifications right now.</p>}
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl overflow-hidden shadow-sm">

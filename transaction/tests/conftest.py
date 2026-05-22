@@ -9,6 +9,4 @@ if str(ROOT) not in sys.path:
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'transaction_service.settings')
 os.environ.setdefault('DEBUG', 'false')
 os.environ.setdefault('TRANSACTION_SECRET_KEY', 'ci-transaction-secret')
-os.environ.setdefault('DATABASE_URL', 'postgresql://soccho:soccho@localhost:5432/soccho')
-os.environ.setdefault('REDIS_CACHE_URL', 'redis://localhost:6379/0')
-os.environ.setdefault('CELERY_BROKER_URL', 'redis://localhost:6379/1')
+# Production wiring only. Inject DATABASE_URL / REDIS_CACHE_URL / CELERY_BROKER_URL explicitly when running tests.

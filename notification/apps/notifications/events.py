@@ -14,16 +14,22 @@ from apps.notifications.retention import cleanup_expired_notifications
 
 
 def _map_event_to_notification(channel: str, payload: dict):
-    if channel == 'transaction.created':
-        ntype = Notification.TYPE_LEND_CONFIRMATION
+    if channel == 'transaction.verification_requested':
+        ntype = Notification.TYPE_TRANSACTION_VERIFICATION
     elif channel == 'friend.request':
         ntype = Notification.TYPE_FRIEND_REQUEST
     elif channel == 'friend.accepted':
         ntype = Notification.TYPE_FRIEND_ACCEPTED
-    elif channel == 'transaction.confirmed':
-        ntype = Notification.TYPE_PAYMENT_ACK
+    elif channel == 'transaction.verified':
+        ntype = Notification.TYPE_TRANSACTION_AGREED
+    elif channel == 'transaction.rejected':
+        ntype = Notification.TYPE_TRANSACTION_REJECTED
+    elif channel == 'transaction.repayment_recorded':
+        ntype = Notification.TYPE_TRANSACTION_REPAYMENT
+    elif channel == 'transaction.due_soon':
+        ntype = Notification.TYPE_DUE_SOON
     else:
-        ntype = Notification.TYPE_DUE_REMINDER
+        ntype = Notification.TYPE_OVERDUE
 
     recipient_id = payload.get('recipient_id') or payload.get('borrower_id') or payload.get('addressee_id')
     return recipient_id, ntype
@@ -68,7 +74,16 @@ def _persist_notification(recipient_id: str, ntype: str, payload: dict):
 async def run_pubsub_listener():
     client = redis.from_url(settings.REDIS_CACHE_URL, decode_responses=True)
     pubsub = client.pubsub()
-    await pubsub.subscribe('transaction.created', 'transaction.confirmed', 'transaction.due_reminder', 'friend.request', 'friend.accepted')
+    await pubsub.subscribe(
+        'transaction.verification_requested',
+        'transaction.verified',
+        'transaction.rejected',
+        'transaction.repayment_recorded',
+        'transaction.due_soon',
+        'transaction.overdue',
+        'friend.request',
+        'friend.accepted',
+    )
 
     layer = get_channel_layer()
     last_cleanup_epoch = 0.0
@@ -106,6 +121,15 @@ async def run_pubsub_listener():
                 },
             )
     finally:
-        await pubsub.unsubscribe('transaction.created', 'transaction.confirmed', 'transaction.due_reminder', 'friend.request', 'friend.accepted')
+        await pubsub.unsubscribe(
+            'transaction.verification_requested',
+            'transaction.verified',
+            'transaction.rejected',
+            'transaction.repayment_recorded',
+            'transaction.due_soon',
+            'transaction.overdue',
+            'friend.request',
+            'friend.accepted',
+        )
         await pubsub.close()
         await client.close()

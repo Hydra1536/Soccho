@@ -26,6 +26,9 @@ class DashboardSummaryComputed:
     monthly_trend: list[MonthlySummaryRow]
 
 
+ACTIVE_ACCOUNTING_STATUSES = {Transaction.STATUS_AGREED, Transaction.STATUS_SETTLED}
+
+
 def _month_iter(start_year: int, start_month: int, end_year: int, end_month: int):
     year = start_year
     month = start_month
@@ -41,12 +44,12 @@ def compute_loyalty_score(user_id: str, rows: list[Transaction]) -> float:
     if not rows:
         return 0.0
 
-    confirmed_rows = [row for row in rows if row.status == Transaction.STATUS_CONFIRMED]
+    confirmed_rows = [row for row in rows if row.status in ACTIVE_ACCOUNTING_STATUSES]
     total_lent = sum((Decimal(row.amount) for row in confirmed_rows if str(row.lender_id) == user_id), start=Decimal('0'))
     total_borrowed = sum((Decimal(row.amount) for row in confirmed_rows if str(row.borrower_id) == user_id), start=Decimal('0'))
 
     borrow_rows = [row for row in rows if str(row.borrower_id) == user_id]
-    confirmed_borrow_rows = [row for row in borrow_rows if row.status == Transaction.STATUS_CONFIRMED]
+    confirmed_borrow_rows = [row for row in borrow_rows if row.status in ACTIVE_ACCOUNTING_STATUSES]
     due_borrow_rows = [row for row in confirmed_borrow_rows if row.due_date is not None]
 
     if due_borrow_rows:
@@ -75,7 +78,7 @@ def compute_loyalty_score(user_id: str, rows: list[Transaction]) -> float:
     overdue_pending = [
         row
         for row in borrow_rows
-        if row.status == Transaction.STATUS_PENDING and row.due_date is not None and row.due_date < today
+        if row.status == Transaction.STATUS_PENDING_VERIFICATION and row.due_date is not None and row.due_date < today
     ]
     overdue_penalty = (len(overdue_pending) / len(borrow_rows)) if borrow_rows else 0.0
     activity = min(1.0, len(confirmed_rows) / 20.0)
@@ -98,7 +101,7 @@ def compute_dashboard_summary(user_id: str) -> DashboardSummaryComputed:
         .order_by('created_at')
     )
 
-    confirmed_rows = [row for row in rows if row.status == Transaction.STATUS_CONFIRMED]
+    confirmed_rows = [row for row in rows if row.status in ACTIVE_ACCOUNTING_STATUSES]
     total_lent = sum((Decimal(row.amount) for row in confirmed_rows if str(row.lender_id) == user_id), start=Decimal('0'))
     total_borrowed = sum((Decimal(row.amount) for row in confirmed_rows if str(row.borrower_id) == user_id), start=Decimal('0'))
     total_confirmed = len(confirmed_rows)

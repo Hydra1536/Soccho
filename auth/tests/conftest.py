@@ -9,5 +9,4 @@ if str(ROOT) not in sys.path:
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'auth_service.settings')
 os.environ.setdefault('DEBUG', 'false')
 os.environ.setdefault('AUTH_SECRET_KEY', 'ci-auth-secret')
-os.environ.setdefault('DATABASE_URL', 'postgresql://soccho:soccho@localhost:5432/soccho')
-os.environ.setdefault('REDIS_CACHE_URL', 'redis://localhost:6379/0')
+# Production wiring only. Inject DATABASE_URL / REDIS_CACHE_URL explicitly when running tests.

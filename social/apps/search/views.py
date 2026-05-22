@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from apps.search.models import SearchableUser
 from apps.search.services import (
+    contextual_search_usernames,
     fallback_search_usernames,
     fuzzy_search_usernames,
     get_loyalty_score,
@@ -37,7 +38,7 @@ class UserSearchView(APIView):
 
         queryset = SearchableUser.objects.exclude(id=user_id)
         try:
-            matches = list(fuzzy_search_usernames(queryset, query)[:20])
+            matches = list(contextual_search_usernames(queryset, query, limit=20))
         except DatabaseError:
             matches = list(fallback_search_usernames(queryset, query)[:20])
         except Exception:

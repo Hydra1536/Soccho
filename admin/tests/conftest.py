@@ -9,5 +9,5 @@ if str(ROOT) not in sys.path:
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'admin_service.settings')
 os.environ.setdefault('DEBUG', 'false')
 os.environ.setdefault('ADMIN_SECRET_KEY', 'ci-admin-secret')
-os.environ.setdefault('DATABASE_URL', 'postgresql://soccho:soccho@localhost:5432/soccho')
+# Production wiring only. Inject DATABASE_URL explicitly when running tests.
 os.environ.setdefault('ADMIN_URL_PATH', '119115131318115/')

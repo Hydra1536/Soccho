@@ -161,7 +161,12 @@ export default function Home() {
     };
 
     const sortCards = (rows: FriendCard[]) =>
-      [...rows].sort((a, b) => {
+      [...rows]
+        .filter((row) => {
+          const removedId = localStorage.getItem('recently_unfriended');
+          return !removedId || String(row.id) !== removedId;
+        })
+        .sort((a, b) => {
         if (b.pendingTotal !== a.pendingTotal) {
           return b.pendingTotal - a.pendingTotal;
         }
@@ -200,6 +205,7 @@ export default function Home() {
           return sortCards(Array.from(byId.values()));
         });
         setNextFriendsCursor(extractCursor(data?.next || null));
+        localStorage.removeItem('recently_unfriended');
       } catch {
         if (!cancelled && !append) {
           setFriendCards([]);

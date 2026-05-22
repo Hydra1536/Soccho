@@ -57,7 +57,8 @@ def _database_config():
             "NAME": parsed.path.lstrip("/"),
             "USER": parsed.username or "",
             "PASSWORD": parsed.password or "",
-            "HOST": parsed.hostname or "localhost",
+            # Localhost-only DB host fallback removed for production wiring.
+            "HOST": parsed.hostname or "",
             "PORT": str(parsed.port or 5432),
         }
     raise ValueError("DATABASE_URL must use postgres/postgresql scheme")

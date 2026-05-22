@@ -84,8 +84,11 @@ async def _forward_request(
     if request.headers.get('host'):
         headers['x-forwarded-host'] = request.headers['host']
     user_id = getattr(request.state, 'user_id', '')
+    username = getattr(request.state, 'username', '')
     if user_id:
         headers['x-user-id'] = user_id
+    if username:
+        headers['x-username'] = username
 
     max_attempts = max(1, retry_attempts + 1)
     async with httpx.AsyncClient(timeout=timeout_seconds) as client:

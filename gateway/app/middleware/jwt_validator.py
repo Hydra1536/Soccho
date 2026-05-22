@@ -26,12 +26,13 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
             logger.info("Auth rejected: missing token path=%s method=%s", request.url.path, request.method)
             return JSONResponse(status_code=401, content={'detail': 'Invalid credentials'})
 
-        user_id = self._validate_locally(token)
-        if not user_id:
+        identity = self._validate_locally(token)
+        if not identity:
             logger.info("Auth rejected: local JWT verify failed path=%s", request.url.path)
             return JSONResponse(status_code=401, content={'detail': 'Invalid credentials'})
 
-        request.state.user_id = user_id
+        request.state.user_id = identity.get('user_id', '')
+        request.state.username = identity.get('username', '')
         try:
             return await call_next(request)
         except Exception:
@@ -58,7 +59,7 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
 
         return ''
 
-    def _validate_locally(self, token: str) -> str:
+    def _validate_locally(self, token: str) -> dict[str, str]:
         try:
             payload = jwt.decode(
                 token,
@@ -67,10 +68,12 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
                 options={'require': ['exp', 'sub']},
             )
         except jwt.PyJWTError:
-            return ''
+            return {}
 
         if payload.get('type') != 'access':
-            return ''
+            return {}
 
-        user_id = str(payload.get('sub', '')).strip()
-        return user_id
+        return {
+            'user_id': str(payload.get('sub', '')).strip(),
+            'username': str(payload.get('username', '')).strip(),
+        }

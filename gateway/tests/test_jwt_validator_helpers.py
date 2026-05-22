@@ -18,7 +18,7 @@ def _build_request(path: str = "/graphql/", headers: list[tuple[bytes, bytes]] |
         "raw_path": path.encode("utf-8"),
         "query_string": query_string,
         "headers": headers or [],
-        "client": ("127.0.0.1", 1234),
+        "client": ("203.0.113.10", 1234),
         "server": ("testserver", 443),
     }
     return Request(scope)

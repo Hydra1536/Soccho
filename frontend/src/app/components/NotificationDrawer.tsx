@@ -22,13 +22,34 @@ interface NotificationDrawerProps {
   onUnreadCountChange?: (count: number) => void;
 }
 
+type ApiNotificationRow = {
+  id: string | number;
+  type: string;
+  payload?: {
+    title?: string;
+    body?: string;
+    amount?: string;
+    transaction_id?: string;
+    route?: string;
+  };
+  created_at?: string;
+};
+
+type NotificationListResponse = {
+  next: string | null;
+  previous: string | null;
+  results: ApiNotificationRow[];
+};
+
+const SEEN_NOTIFICATION_IDS_KEY = 'seen_notification_ids';
+const CACHED_NOTIFICATIONS_KEY = 'cached_notifications';
+
 function toWsUrl(httpUrl: string): string {
   const url = new URL(httpUrl);
   if (url.protocol === 'ws:' || url.protocol === 'wss:') {
     return `${url.protocol}//${url.host}`;
   }
-  const scheme = url.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${scheme}//${url.host}`;
+  return `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}`;
 }
 
 function formatTimestamp(timestamp: string): string {
@@ -45,26 +66,6 @@ function formatTimestamp(timestamp: string): string {
   }).format(parsed);
 }
 
-type ApiNotificationRow = {
-  id: string | number;
-  type: string;
-  payload?: {
-    title?: string;
-    body?: string;
-    amount?: string;
-    transaction_id?: string;
-  };
-  created_at?: string;
-};
-
-type NotificationListResponse = {
-  next: string | null;
-  previous: string | null;
-  results: ApiNotificationRow[];
-};
-
-const SEEN_NOTIFICATION_IDS_KEY = 'seen_notification_ids';
-
 function readSeenNotificationIds(): string[] {
   try {
     const raw = localStorage.getItem(SEEN_NOTIFICATION_IDS_KEY);
@@ -72,10 +73,7 @@ function readSeenNotificationIds(): string[] {
       return [];
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.map((item) => String(item)).filter(Boolean);
+    return Array.isArray(parsed) ? parsed.map((item) => String(item)).filter(Boolean) : [];
   } catch {
     return [];
   }
@@ -83,8 +81,28 @@ function readSeenNotificationIds(): string[] {
 
 function writeSeenNotificationIds(ids: string[]) {
   try {
-    const normalized = Array.from(new Set(ids)).slice(0, 2000);
-    localStorage.setItem(SEEN_NOTIFICATION_IDS_KEY, JSON.stringify(normalized));
+    localStorage.setItem(SEEN_NOTIFICATION_IDS_KEY, JSON.stringify(Array.from(new Set(ids)).slice(0, 2000)));
+  } catch {
+    return;
+  }
+}
+
+function readCachedNotifications(): NotificationItem[] {
+  try {
+    const raw = localStorage.getItem(CACHED_NOTIFICATIONS_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedNotifications(items: NotificationItem[]) {
+  try {
+    localStorage.setItem(CACHED_NOTIFICATIONS_KEY, JSON.stringify(items.slice(0, 100)));
   } catch {
     return;
   }
@@ -107,11 +125,23 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
 
   useEffect(() => {
     notificationsRef.current = notifications;
+    if (notifications.length > 0) {
+      writeCachedNotifications(notifications);
+    }
   }, [notifications]);
 
   useEffect(() => {
     isOpenRef.current = isOpen;
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!notifications.length) {
+      const cached = readCachedNotifications();
+      if (cached.length > 0) {
+        onNotificationsChange?.(cached);
+      }
+    }
+  }, [notifications.length, onNotificationsChange]);
 
   const unreadCount = useMemo(() => (isOpen ? 0 : unseenIds.length), [isOpen, unseenIds.length]);
 
@@ -134,35 +164,34 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
   const toNotificationItem = (row: ApiNotificationRow): NotificationItem => {
     const isFriendRequest = row.type === 'friend_request';
     const isFriendAccepted = row.type === 'friend_accepted';
-    const isPaymentAck = row.type === 'payment_ack';
-    const isLendConfirmation = row.type === 'lend_confirmation';
-    const amount = row.payload?.amount ? `৳${row.payload.amount}` : '';
-    const mappedType: NotificationItem['type'] =
-      row.type === 'lend_confirmation' ? 'pending' : row.type === 'due_reminder' ? 'reminder' : 'received';
+    const isTransactionVerification = row.type === 'transaction_verification';
+    const isDueSoon = row.type === 'due_soon';
+    const isOverdue = row.type === 'overdue';
+    const amount = row.payload?.amount ? `TK ${row.payload.amount}` : '';
     return {
       id: String(row.id || crypto.randomUUID()),
       dedupeKey: row.payload?.transaction_id ? `${row.type}:${String(row.payload.transaction_id)}` : undefined,
-      type: mappedType,
+      type: isTransactionVerification ? 'pending' : isDueSoon || isOverdue ? 'reminder' : 'received',
       title:
         row.payload?.title
         || (isFriendRequest
           ? 'New friend request'
           : isFriendAccepted
             ? 'Friend request accepted'
-            : isLendConfirmation
-              ? 'Payment confirmation needed'
-              : isPaymentAck
-                ? 'Payment confirmed'
-                : 'Notification'),
+            : isTransactionVerification
+              ? 'Transaction verification needed'
+              : isOverdue
+                ? 'Overdue balance'
+                : isDueSoon
+                  ? 'Due soon'
+                  : 'Notification'),
       message:
         row.payload?.body
-        || (isLendConfirmation
-          ? `${amount} payment is waiting for your approval.`
-          : isPaymentAck
-            ? `${amount} payment was confirmed.`
-            : 'You have a new notification.'),
+        || (isTransactionVerification
+          ? `${amount} is waiting for your verification.`
+          : 'You have a new notification.'),
       timestamp: row.created_at || new Date().toISOString(),
-      route: isFriendRequest || isFriendAccepted ? '/friends' : undefined,
+      route: row.payload?.route || (isFriendRequest || isFriendAccepted ? '/friends' : undefined),
     };
   };
 
@@ -189,15 +218,14 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       const params = cursor ? { cursor } : {};
       const { data } = await api.get<NotificationListResponse>('/api/notification/list/', { params });
       const mapped = (data?.results || []).map(toNotificationItem);
-      const nextItems = append
-        ? dedupeById([...notificationsRef.current, ...mapped])
-        : dedupeById(mapped);
+      const nextItems = append ? dedupeById([...notificationsRef.current, ...mapped]) : dedupeById(mapped);
       onNotificationsChange?.(nextItems);
       setNextCursor(extractCursor(data?.next || null));
       setShowMoreButton(false);
     } catch {
       if (!append) {
-        onNotificationsChange?.([]);
+        const cached = readCachedNotifications();
+        onNotificationsChange?.(cached);
       }
       setNextCursor(null);
     } finally {
@@ -222,15 +250,6 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || notifications.length === 0) {
-      return;
-    }
-    const mergedSeen = Array.from(new Set([...seenIdsRef.current, ...notifications.map((item) => item.dedupeKey || item.id)]));
-    seenIdsRef.current = mergedSeen;
-    writeSeenNotificationIds(mergedSeen);
-  }, [isOpen, notifications]);
-
-  useEffect(() => {
     let cancelled = false;
 
     const clearReconnectTimer = () => {
@@ -244,7 +263,6 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       if (cancelled) {
         return;
       }
-
       const delay = Math.min(2000 * (reconnectAttemptRef.current + 1), 15000);
       reconnectAttemptRef.current += 1;
       clearReconnectTimer();
@@ -260,9 +278,8 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
         return;
       }
 
-      const base = import.meta.env.VITE_NOTIFICATION_WS_URL || 'https://soccho-notification.onrender.com';
-      const wsBase = toWsUrl(base);
-      const ws = new WebSocket(`${wsBase}/ws/notifications/?token=${encodeURIComponent(token)}`);
+      const base = import.meta.env.VITE_NOTIFICATION_WS_URL || 'wss://soccho-notification.onrender.com';
+      const ws = new WebSocket(`${toWsUrl(base)}/ws/notifications/?token=${encodeURIComponent(token)}`);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -272,12 +289,13 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       ws.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
-          if (payload?.event === 'notification.cleared' && payload?.notification_id) {
-            onNotificationsChange?.(notificationsRef.current.filter((item) => item.id !== String(payload.notification_id)));
-            return;
-          }
           if (
-            payload?.event === 'transaction.created'
+            payload?.event === 'transaction.verification_requested'
+            || payload?.event === 'transaction.verified'
+            || payload?.event === 'transaction.rejected'
+            || payload?.event === 'transaction.repayment_recorded'
+            || payload?.event === 'transaction.due_soon'
+            || payload?.event === 'transaction.overdue'
             || payload?.event === 'notification.push'
             || payload?.event === 'notification.pending'
             || payload?.event === 'friend.request'
@@ -290,19 +308,14 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
               payload: row.payload || {},
               created_at: row.created_at,
             });
-            onNotificationsChange?.(dedupeById([item, ...notificationsRef.current]));
+            const nextItems = dedupeById([item, ...notificationsRef.current]);
+            onNotificationsChange?.(nextItems);
             if (!isOpenRef.current) {
               const key = item.dedupeKey || item.id;
-              const alreadySeen = seenIdsRef.current.includes(key);
-              if (alreadySeen) {
+              if (seenIdsRef.current.includes(key)) {
                 return;
               }
-              setUnseenIds((prev) => {
-                if (prev.includes(key)) {
-                  return prev;
-                }
-                return [key, ...prev];
-              });
+              setUnseenIds((prev) => (prev.includes(key) ? prev : [key, ...prev]));
             }
           }
         } catch {
@@ -310,16 +323,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
         }
       };
 
-      ws.onerror = () => {
-        if (import.meta.env.DEV) {
-          console.warn('Notification websocket error');
-        }
-      };
-
       ws.onclose = (event) => {
-        if (import.meta.env.DEV) {
-          console.warn('Notification websocket closed', { code: event.code, reason: event.reason });
-        }
         if (wsRef.current === ws) {
           wsRef.current = null;
         }
@@ -348,15 +352,6 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       wsRef.current = null;
     };
   }, [onNotificationsChange]);
-
-  const handleAction = (id: string, action: 'agree' | 'disagree') => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ action, notification_id: id }));
-
-    if (action === 'agree') {
-      onNotificationsChange?.(notificationsRef.current.filter((n) => n.id !== id));
-    }
-  };
 
   const getIcon = (type: NotificationItem['type']) => {
     switch (type) {
@@ -409,7 +404,6 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
       {isOpen && (
         <>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
-
           <motion.div
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
@@ -429,9 +423,7 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
             </div>
 
             <div className="p-4 space-y-3">
-              {loadingInitial && (
-                <p className="text-sm text-[#6B7280]">Loading notifications...</p>
-              )}
+              {loadingInitial && <p className="text-sm text-[#6B7280]">Loading notifications...</p>}
               {notifications.map((notification) => (
                 <div
                   key={notification.id}
@@ -455,17 +447,6 @@ export function NotificationDrawer({ isOpen, onClose, notifications, onNotificat
                       <h3 className="font-medium text-sm text-[#111827] mb-1">{notification.title}</h3>
                       <p className="text-sm text-[#6B7280] mb-2">{notification.message}</p>
                       <p className="text-xs text-[#9CA3AF]">{formatTimestamp(notification.timestamp)}</p>
-
-                      {notification.type === 'pending' && (
-                        <div className="flex gap-2 mt-3">
-                          <button onClick={() => handleAction(notification.id, 'agree')} className="px-3 py-1.5 bg-[#10B981] text-white text-sm rounded-lg hover:bg-[#059669] transition-colors">
-                            Agree
-                          </button>
-                          <button onClick={() => handleAction(notification.id, 'disagree')} className="px-3 py-1.5 bg-[#EF4444] text-white text-sm rounded-lg hover:bg-[#DC2626] transition-colors">
-                            Disagree
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>

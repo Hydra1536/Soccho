@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from apps.friendships.models import Friendship
 from apps.friendships.serializers import FriendshipActionSerializer, FriendshipSerializer
 from apps.search.models import SearchableUser
+from apps.search.services import hard_evict_user_caches
 
 
 class FriendshipCursorPagination(CursorPagination):
@@ -185,6 +186,7 @@ class AcceptRequestView(APIView):
         friendship.status = Friendship.STATUS_ACCEPTED
         friendship.save(update_fields=['status', 'updated_at'])
         _emit_friend_accept_notification(friendship, current_user_id)
+        hard_evict_user_caches(str(current_user_id), str(requester_id))
         return Response(FriendshipSerializer(friendship).data, status=status.HTTP_200_OK)
 
 
@@ -309,4 +311,5 @@ class UnfriendView(APIView):
             return Response({'detail': 'Friendship not found'}, status=status.HTTP_404_NOT_FOUND)
 
         friendship.delete()
+        hard_evict_user_caches(str(current_user_id), str(target_user_id))
         return Response({'detail': 'Unfriended successfully'}, status=status.HTTP_200_OK)

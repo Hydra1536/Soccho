@@ -1,6 +1,6 @@
 # Soccho Render Deployment Guide (HTTP-Only + Cold-Start Resilience)
 
-This repository uses HTTP-only service communication and includes Render Free cold-start mitigation.
+This repository uses HTTP-only service communication and includes gateway-embedded Render cold-start mitigation.
 
 ## 1. Important repo rule
 
@@ -17,14 +17,9 @@ Primary mitigation in this repo:
 - gateway now returns controlled `503` for upstream warm-up failures (instead of opaque `502`),
 - OAuth proxy has longer timeout and bounded retry.
 
-Optional mitigation:
+Primary warm-keep mitigation:
 
-- keepalive worker can ping services periodically to reduce cold starts.
-
-Tradeoff:
-
-- keepalive reduces cold starts but consumes free instance hours and bandwidth.
-- keepalive does not prevent platform maintenance or restart events.
+- the gateway now runs an internal asynchronous keepalive loop that pings its own health endpoint plus the Social, Transaction, and Notification services every 10 minutes.
 
 ## 3. Recommended Render service layout
 
@@ -44,7 +39,6 @@ Tradeoff:
 ### Background workers
 
 - `soccho-transaction-worker` (Background Worker)
-- `soccho-keepalive-worker` (Background Worker, optional)
 
 ### Managed data services
 
@@ -169,17 +163,6 @@ pip install -r transaction/requirements.txt
 cd transaction && celery -A transaction_service worker -B
 ```
 
-### soccho-keepalive-worker (optional)
-
-- Build Command:
-```bash
-pip install -r keepalive/requirements.txt
-```
-- Start Command:
-```bash
-python keepalive/worker.py
-```
-
 ## 5. Required environment variables
 
 Set these service URLs in `soccho-gateway`:
@@ -207,21 +190,8 @@ Set these shared values across backend services:
 
 Important: `AUTH_SECRET_KEY` must be identical in `soccho-auth-http`, `soccho-gateway`, and `soccho-notification`.
 
-### Keepalive worker env (optional)
-
-- `KEEPALIVE_ENABLED` (`true` or `false`)
 - `KEEPALIVE_INTERVAL_SECONDS` (default `600`)
-- `KEEPALIVE_TIMEOUT_SECONDS` (default `15`)
-- `KEEPALIVE_JITTER_SECONDS` (default `0`)
-- `KEEPALIVE_TARGETS` (comma-separated health URLs)
-
-Default targets are:
-
-- `https://soccho-gateway.onrender.com/healthz`
-- `https://soccho-auth.onrender.com/api/auth/health/`
-- `https://soccho-social.onrender.com/health/`
-- `https://soccho-transaction.onrender.com/health/`
-- `https://soccho-notification.onrender.com/health/`
+- this is consumed by the gateway's embedded keepalive loop.
 
 ## 6. Post-deploy verification
 
@@ -245,4 +215,4 @@ Default targets are:
 
 - Gateway logs show structured upstream warm-up warnings on timeout/connection failures.
 - OAuth retries are visible at most once per request path.
-- Keepalive worker logs periodic probe results without process crash.
+- Gateway logs show periodic keepalive probe results without process crash.

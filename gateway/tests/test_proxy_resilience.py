@@ -22,7 +22,7 @@ def _build_request(path: str, method: str = "GET") -> Request:
         "raw_path": path.encode("utf-8"),
         "query_string": b"",
         "headers": [(b"host", b"soccho-gateway.onrender.com")],
-        "client": ("127.0.0.1", 12345),
+        "client": ("203.0.113.10", 12345),
         "server": ("testserver", 443),
     }
     return Request(scope, receive)

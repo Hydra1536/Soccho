@@ -14,7 +14,8 @@ class SearchableUser(models.Model):
 
 
 class SearchableTransaction(models.Model):
-    STATUS_CONFIRMED = 'confirmed'
+    STATUS_AGREED = 'agreed'
+    STATUS_SETTLED = 'settled'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     lender_id = models.UUIDField()

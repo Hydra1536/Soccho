@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     social_http_base_url: str = Field(default='https://soccho-social.onrender.com', alias='SOCIAL_HTTP_BASE_URL')
     transaction_http_base_url: str = Field(default='https://soccho-transaction.onrender.com', alias='TRANSACTION_HTTP_BASE_URL')
     notification_http_base_url: str = Field(default='https://soccho-notification.onrender.com', alias='NOTIFICATION_HTTP_BASE_URL')
+    keepalive_interval_seconds: int = Field(default=600, alias='KEEPALIVE_INTERVAL_SECONDS')
 
     allowed_origins_raw: str = Field(default='https://soccho.onrender.com,https://soccho.vercel.app', alias='ALLOWED_ORIGINS')
     admin_url_path: str = Field(default='/admin', alias='ADMIN_URL_PATH')

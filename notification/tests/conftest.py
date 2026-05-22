@@ -10,6 +10,4 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'notification_service.settings')
 os.environ.setdefault('DEBUG', 'false')
 os.environ.setdefault('NOTIFICATION_SECRET_KEY', 'ci-notification-secret')
 os.environ.setdefault('AUTH_SECRET_KEY', 'ci-auth-secret')
-os.environ.setdefault('DATABASE_URL', 'postgresql://soccho:soccho@localhost:5432/soccho')
-os.environ.setdefault('REDIS_CACHE_URL', 'redis://localhost:6379/0')
-os.environ.setdefault('CHANNEL_LAYERS_REDIS_URL', 'redis://localhost:6379/2')
+# Production wiring only. Inject DATABASE_URL / REDIS_CACHE_URL / CHANNEL_LAYERS_REDIS_URL explicitly when running tests.

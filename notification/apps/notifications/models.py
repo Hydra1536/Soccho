@@ -4,16 +4,22 @@ from django.db import models
 
 
 class Notification(models.Model):
-    TYPE_LEND_CONFIRMATION = 'lend_confirmation'
-    TYPE_PAYMENT_ACK = 'payment_ack'
-    TYPE_DUE_REMINDER = 'due_reminder'
+    TYPE_TRANSACTION_VERIFICATION = 'transaction_verification'
+    TYPE_TRANSACTION_AGREED = 'transaction_agreed'
+    TYPE_TRANSACTION_REJECTED = 'transaction_rejected'
+    TYPE_TRANSACTION_REPAYMENT = 'transaction_repayment'
+    TYPE_DUE_SOON = 'due_soon'
+    TYPE_OVERDUE = 'overdue'
     TYPE_FRIEND_REQUEST = 'friend_request'
     TYPE_FRIEND_ACCEPTED = 'friend_accepted'
 
     TYPE_CHOICES = (
-        (TYPE_LEND_CONFIRMATION, 'Lend Confirmation'),
-        (TYPE_PAYMENT_ACK, 'Payment Acknowledgement'),
-        (TYPE_DUE_REMINDER, 'Due Reminder'),
+        (TYPE_TRANSACTION_VERIFICATION, 'Transaction Verification'),
+        (TYPE_TRANSACTION_AGREED, 'Transaction Agreed'),
+        (TYPE_TRANSACTION_REJECTED, 'Transaction Rejected'),
+        (TYPE_TRANSACTION_REPAYMENT, 'Transaction Repayment'),
+        (TYPE_DUE_SOON, 'Due Soon'),
+        (TYPE_OVERDUE, 'Overdue'),
         (TYPE_FRIEND_REQUEST, 'Friend Request'),
         (TYPE_FRIEND_ACCEPTED, 'Friend Accepted'),
     )
@@ -34,4 +40,4 @@ class Notification(models.Model):
 
     @property
     def should_repeat_on_login(self) -> bool:
-        return self.type == self.TYPE_DUE_REMINDER and not self.is_cleared
+        return self.type in {self.TYPE_DUE_SOON, self.TYPE_OVERDUE} and not self.is_cleared

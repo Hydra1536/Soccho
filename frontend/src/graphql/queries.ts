@@ -40,6 +40,19 @@ export const GET_FRIEND_LEDGER = gql`
       netBalance
       pendingReceivable
       pendingPayable
+      activeDueTotal
+      counterpartOwesYou
+      pendingVerifications {
+        id
+        lenderId
+        borrowerId
+        friendshipId
+        amount
+        status
+        dueDate
+        note
+        createdAt
+      }
       transactions {
         id
         lenderId
@@ -48,6 +61,8 @@ export const GET_FRIEND_LEDGER = gql`
         amount
         status
         dueDate
+        note
+        createdAt
       }
     }
   }
