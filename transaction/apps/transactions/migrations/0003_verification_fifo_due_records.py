@@ -54,6 +54,28 @@ def backward_cleanup_due_records(apps, schema_editor):
         Transaction.objects.filter(status=old).update(status=new)
 
 
+def conditionally_add_note_field(apps, schema_editor):
+    """Check if note field exists before adding it to handle idempotency."""
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT EXISTS(
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='transactions' AND column_name='note'
+            )
+        """)
+        note_exists = cursor.fetchone()[0]
+        
+        if note_exists:
+            return  # Field already exists, skip adding it
+        
+        # Field doesn't exist, add it using the schema_editor
+        Transaction = apps.get_model('transactions', 'Transaction')
+        schema_editor.add_field(
+            Transaction,
+            Transaction._meta.get_field('note')
+        )
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ('transactions', '0002_add_dashboard_loyalty_indexes'),
@@ -65,11 +87,8 @@ class Migration(migrations.Migration):
             name='friendship_route_id',
             field=models.CharField(blank=True, default='', max_length=64),
         ),
-        migrations.AddField(
-            model_name='transaction',
-            name='note',
-            field=django_cryptography.fields.encrypt(models.TextField(blank=True, default='')),
-        ),
+        # Use RunPython for the note field to make it idempotent
+        migrations.RunPython(conditionally_add_note_field, migrations.RunPython.noop),
         migrations.AddField(
             model_name='transaction',
             name='rejected_at',
