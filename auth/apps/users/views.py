@@ -33,7 +33,9 @@ from apps.users.serializers import (
 )
 
 INVALID_CREDENTIALS = {"detail": "Invalid credentials"}
-ACCOUNT_NOT_VERIFIED = {"detail": "Account is not verified. Please verify the OTP code first."}
+ACCOUNT_NOT_VERIFIED = {
+    "detail": "Account is not verified. Please verify the OTP code first."
+}
 REGISTRATION_FAILED = {"detail": "Registration could not be completed"}
 EMAIL_ALREADY_EXISTS = {"detail": "An account with this email already exists"}
 USERNAME_ALREADY_EXISTS = {"detail": "This username is already taken"}
@@ -84,7 +86,9 @@ def _issue_tokens(user: User):
 
     access = jwt.encode(access_payload, settings.SECRET_KEY, algorithm="HS256")
     refresh = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm="HS256")
-    RefreshToken.objects.create(user=user, token_hash=_hash_token(refresh), is_revoked=False)
+    RefreshToken.objects.create(
+        user=user, token_hash=_hash_token(refresh), is_revoked=False
+    )
     return access, refresh
 
 
@@ -102,7 +106,9 @@ def _get_user_by_email(email: str) -> User | None:
     if not normalized_email:
         return None
     try:
-        return User.objects.filter(email_lookup=make_email_lookup(normalized_email)).first()
+        return User.objects.filter(
+            email_lookup=make_email_lookup(normalized_email)
+        ).first()
     except DatabaseError as exc:
         raise AuthStorageError("User email lookup failed") from exc
 
@@ -171,7 +177,11 @@ def _get_authenticated_user(request) -> User | None:
 
 
 def _allowed_frontend_origins() -> list[str]:
-    return [origin.rstrip("/") for origin in getattr(settings, "ALLOWED_ORIGINS", []) if origin]
+    return [
+        origin.rstrip("/")
+        for origin in getattr(settings, "ALLOWED_ORIGINS", [])
+        if origin
+    ]
 
 
 def _is_allowed_frontend_origin(origin: str) -> bool:
@@ -213,7 +223,9 @@ def _google_callback_url(request) -> str:
 
 
 def _google_state(frontend_origin: str) -> str:
-    return signing.dumps({"frontend_origin": frontend_origin.rstrip("/")}, salt=GOOGLE_STATE_SALT)
+    return signing.dumps(
+        {"frontend_origin": frontend_origin.rstrip("/")}, salt=GOOGLE_STATE_SALT
+    )
 
 
 def _load_google_state(raw_state: str) -> dict:
@@ -221,7 +233,9 @@ def _load_google_state(raw_state: str) -> dict:
 
 
 def _google_username_seed(name: str) -> str:
-    normalized = "".join(ch for ch in name.lower().replace(" ", "_") if ch.isalnum() or ch == "_")
+    normalized = "".join(
+        ch for ch in name.lower().replace(" ", "_") if ch.isalnum() or ch == "_"
+    )
     return normalized[:30] or "user"
 
 
@@ -231,7 +245,7 @@ def _unique_username(seed: str) -> str:
     suffix = 1
     while User.objects.filter(username=candidate).exists():
         suffix_text = f"_{suffix}"
-        candidate = f"{base[:30 - len(suffix_text)]}{suffix_text}"
+        candidate = f"{base[: 30 - len(suffix_text)]}{suffix_text}"
         suffix += 1
     return candidate
 
@@ -318,7 +332,10 @@ def _exchange_google_code(code: str, redirect_uri: str) -> dict:
     req = urllib_request.Request(
         "https://oauth2.googleapis.com/token",
         data=data,
-        headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+        },
         method="POST",
     )
     try:
@@ -383,12 +400,16 @@ async def _send_otp_email_async(user_email: str, otp_code: str):
             if response.status_code < 200 or response.status_code >= 300:
                 if (
                     response.status_code == 403
-                    and "non-browser environments is currently disabled" in response.text.lower()
+                    and "non-browser environments is currently disabled"
+                    in response.text.lower()
                 ):
                     logger.error(
                         "EmailJS blocked backend request. Enable non-browser API access in EmailJS dashboard security settings."
                     )
-                if response.status_code == 422 and "recipients address is empty" in response.text.lower():
+                if (
+                    response.status_code == 422
+                    and "recipients address is empty" in response.text.lower()
+                ):
                     logger.error(
                         "EmailJS template recipient is unresolved. Set the template 'To Email' value to {{to_email}} (or {{email}})."
                     )
@@ -445,7 +466,10 @@ class RegisterView(PublicEndpointMixin, APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response({"detail": _serializer_error_detail(serializer)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": _serializer_error_detail(serializer)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         username = serializer.validated_data["username"]
         normalized_email = normalize_email(serializer.validated_data["email"])
@@ -453,11 +477,15 @@ class RegisterView(PublicEndpointMixin, APIView):
             existing_user = _get_user_by_email(normalized_email)
             username_owner = _get_user_by_username(username)
         except AuthStorageError:
-            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
         if existing_user and existing_user.is_verified:
             return Response(EMAIL_ALREADY_EXISTS, status=status.HTTP_409_CONFLICT)
-        if username_owner and (existing_user is None or username_owner.id != existing_user.id):
+        if username_owner and (
+            existing_user is None or username_owner.id != existing_user.id
+        ):
             return Response(USERNAME_ALREADY_EXISTS, status=status.HTTP_409_CONFLICT)
 
         try:
@@ -474,7 +502,9 @@ class RegisterView(PublicEndpointMixin, APIView):
                     user.username = username
                     user.password_hash = serializer.get_password_hash()
                     user.is_verified = False
-                    user.save(update_fields=["username", "password_hash", "is_verified"])
+                    user.save(
+                        update_fields=["username", "password_hash", "is_verified"]
+                    )
                     OTPCode.objects.filter(
                         user=user,
                         context=OTPCode.CONTEXT_REGISTER,
@@ -485,16 +515,22 @@ class RegisterView(PublicEndpointMixin, APIView):
         except IntegrityError:
             return Response(REGISTRATION_FAILED, status=status.HTTP_400_BAD_REQUEST)
         except AuthStorageError:
-            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         except ValueError:
             logger.warning(
                 "Register OTP delivery returned service unavailable username=%s email_domain=%s",
                 username,
                 normalized_email.split("@")[-1] if "@" in normalized_email else "",
             )
-            return Response(OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         except Exception:
-            return Response(REGISTRATION_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                REGISTRATION_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
         return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)
 
@@ -509,17 +545,23 @@ class LoginView(PublicEndpointMixin, APIView):
         try:
             user = _get_user_by_email(serializer.validated_data["email"])
         except AuthStorageError:
-            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         if user is None:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
         if not user.is_verified:
             return Response(ACCOUNT_NOT_VERIFIED, status=status.HTTP_403_FORBIDDEN)
 
-        if not user.password_hash or not check_password(serializer.validated_data["password"], user.password_hash):
+        if not user.password_hash or not check_password(
+            serializer.validated_data["password"], user.password_hash
+        ):
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         access, refresh = _issue_tokens(user)
-        return Response({"access": access, "refresh": refresh}, status=status.HTTP_200_OK)
+        return Response(
+            {"access": access, "refresh": refresh}, status=status.HTTP_200_OK
+        )
 
 
 class RefreshView(PublicEndpointMixin, APIView):
@@ -537,7 +579,9 @@ class RefreshView(PublicEndpointMixin, APIView):
 
         token_hash = _hash_token(refresh)
         try:
-            stored = RefreshToken.objects.select_related("user").get(token_hash=token_hash, is_revoked=False)
+            stored = RefreshToken.objects.select_related("user").get(
+                token_hash=token_hash, is_revoked=False
+            )
         except RefreshToken.DoesNotExist:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -545,7 +589,9 @@ class RefreshView(PublicEndpointMixin, APIView):
         stored.save(update_fields=["is_revoked"])
 
         access, new_refresh = _issue_tokens(stored.user)
-        return Response({"access": access, "refresh": new_refresh}, status=status.HTTP_200_OK)
+        return Response(
+            {"access": access, "refresh": new_refresh}, status=status.HTTP_200_OK
+        )
 
 
 class LogoutView(PublicEndpointMixin, APIView):
@@ -555,7 +601,9 @@ class LogoutView(PublicEndpointMixin, APIView):
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         token_hash = _hash_token(refresh)
-        updated = RefreshToken.objects.filter(token_hash=token_hash, is_revoked=False).update(is_revoked=True)
+        updated = RefreshToken.objects.filter(
+            token_hash=token_hash, is_revoked=False
+        ).update(is_revoked=True)
         if updated == 0:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -566,7 +614,9 @@ class MeView(PublicEndpointMixin, APIView):
         try:
             user = _get_authenticated_user(request)
         except AuthStorageError:
-            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
         if user is None:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
@@ -596,28 +646,47 @@ class GoogleOAuthView(PublicEndpointMixin, APIView):
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            payload = _load_google_payload(id_token=id_token or "", access_token=access_token or "")
+            payload = _load_google_payload(
+                id_token=id_token or "", access_token=access_token or ""
+            )
             user = _google_user_from_payload(payload)
         except AuthStorageError:
-            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         except ValueError:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         access, refresh = _issue_tokens(user)
-        return Response({"access": access, "refresh": refresh}, status=status.HTTP_200_OK)
+        return Response(
+            {"access": access, "refresh": refresh}, status=status.HTTP_200_OK
+        )
 
 
 class GoogleOAuthStartView(PublicEndpointMixin, APIView):
     def get(self, request):
-        frontend_origin = (request.query_params.get("frontend_origin") or "").strip().rstrip("/")
+        frontend_origin = (
+            (request.query_params.get("frontend_origin") or "").strip().rstrip("/")
+        )
         if not frontend_origin or not _is_allowed_frontend_origin(frontend_origin):
             fallback_origin = _default_frontend_origin()
             if fallback_origin:
-                return _redirect_to_frontend(fallback_origin, google_error="Frontend origin is not allowed for Google sign-in.")
-            return Response({"detail": "Frontend origin is not allowed"}, status=status.HTTP_400_BAD_REQUEST)
+                return _redirect_to_frontend(
+                    fallback_origin,
+                    google_error="Frontend origin is not allowed for Google sign-in.",
+                )
+            return Response(
+                {"detail": "Frontend origin is not allowed"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        if not getattr(settings, "GOOGLE_CLIENT_ID", "") or not getattr(settings, "GOOGLE_CLIENT_SECRET", ""):
-            return _redirect_to_frontend(frontend_origin, google_error="Google OAuth is not configured on the server.")
+        if not getattr(settings, "GOOGLE_CLIENT_ID", "") or not getattr(
+            settings, "GOOGLE_CLIENT_SECRET", ""
+        ):
+            return _redirect_to_frontend(
+                frontend_origin,
+                google_error="Google OAuth is not configured on the server.",
+            )
 
         params = parse.urlencode(
             {
@@ -631,7 +700,9 @@ class GoogleOAuthStartView(PublicEndpointMixin, APIView):
                 "prompt": "select_account",
             }
         )
-        return HttpResponseRedirect(f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
+        return HttpResponseRedirect(
+            f"https://accounts.google.com/o/oauth2/v2/auth?{params}"
+        )
 
 
 class GoogleOAuthCallbackView(PublicEndpointMixin, APIView):
@@ -642,22 +713,32 @@ class GoogleOAuthCallbackView(PublicEndpointMixin, APIView):
         except signing.BadSignature:
             frontend_origin = _default_frontend_origin()
             if frontend_origin:
-                return _redirect_to_frontend(frontend_origin, google_error="Google sign-in state expired. Please try again.")
+                return _redirect_to_frontend(
+                    frontend_origin,
+                    google_error="Google sign-in state expired. Please try again.",
+                )
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         frontend_origin = state.get("frontend_origin", "").rstrip("/")
         if not frontend_origin or not _is_allowed_frontend_origin(frontend_origin):
             frontend_origin = _default_frontend_origin()
             if not frontend_origin:
-                return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+                return Response(
+                    INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED
+                )
 
         provider_error = request.query_params.get("error")
         if provider_error:
-            return _redirect_to_frontend(frontend_origin, google_error=f"Google returned {provider_error}.")
+            return _redirect_to_frontend(
+                frontend_origin, google_error=f"Google returned {provider_error}."
+            )
 
         code = request.query_params.get("code")
         if not code:
-            return _redirect_to_frontend(frontend_origin, google_error="Google did not return an authorization code.")
+            return _redirect_to_frontend(
+                frontend_origin,
+                google_error="Google did not return an authorization code.",
+            )
 
         try:
             token_payload = _exchange_google_code(code, _google_callback_url(request))
@@ -667,12 +748,18 @@ class GoogleOAuthCallbackView(PublicEndpointMixin, APIView):
             )
             user = _google_user_from_payload(payload)
         except AuthStorageError:
-            return _redirect_to_frontend(frontend_origin, google_error="Auth service is temporarily unavailable.")
+            return _redirect_to_frontend(
+                frontend_origin, google_error="Auth service is temporarily unavailable."
+            )
         except ValueError:
-            return _redirect_to_frontend(frontend_origin, google_error="Google sign-in could not be completed.")
+            return _redirect_to_frontend(
+                frontend_origin, google_error="Google sign-in could not be completed."
+            )
 
         access, refresh = _issue_tokens(user)
-        return _redirect_to_frontend(frontend_origin, access_token=access, refresh_token=refresh)
+        return _redirect_to_frontend(
+            frontend_origin, access_token=access, refresh_token=refresh
+        )
 
 
 @_axes_protected
@@ -686,14 +773,18 @@ class ForgotPasswordView(PublicEndpointMixin, APIView):
         try:
             user = _get_user_by_email(normalized_email)
         except AuthStorageError:
-            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         if user is None:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
         try:
             otp_code = generate_otp(user, OTPCode.CONTEXT_FORGOT)
             _send_otp_email(normalized_email, otp_code, OTPCode.CONTEXT_FORGOT)
         except ValueError:
-            return Response(OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         except Exception:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -710,11 +801,15 @@ class ChangePasswordView(PublicEndpointMixin, APIView):
         try:
             user = _get_user_by_email(serializer.validated_data["email"])
         except AuthStorageError:
-            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         if user is None:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
-        if not user.password_hash or not check_password(serializer.validated_data["old_password"], user.password_hash):
+        if not user.password_hash or not check_password(
+            serializer.validated_data["old_password"], user.password_hash
+        ):
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
         OTPCode.objects.filter(
@@ -733,7 +828,9 @@ class ChangePasswordView(PublicEndpointMixin, APIView):
             _send_otp_email(user.email, otp_code, OTPCode.CONTEXT_CHANGE_PW)
         except ValueError:
             cache.delete(_change_password_cache_key(str(user.id)))
-            return Response(OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                OTP_DELIVERY_FAILED, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         except Exception:
             cache.delete(_change_password_cache_key(str(user.id)))
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)

@@ -17,63 +17,77 @@ class JWTValidationMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.settings = get_settings()
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[object]]):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[object]]
+    ):
         if should_skip_auth(request.method, request.url.path):
             return await call_next(request)
 
         token = self._extract_token(request)
         if not token:
-            logger.info("Auth rejected: missing token path=%s method=%s", request.url.path, request.method)
-            return JSONResponse(status_code=401, content={'detail': 'Invalid credentials'})
+            logger.info(
+                "Auth rejected: missing token path=%s method=%s",
+                request.url.path,
+                request.method,
+            )
+            return JSONResponse(
+                status_code=401, content={"detail": "Invalid credentials"}
+            )
 
         identity = self._validate_locally(token)
         if not identity:
-            logger.info("Auth rejected: local JWT verify failed path=%s", request.url.path)
-            return JSONResponse(status_code=401, content={'detail': 'Invalid credentials'})
+            logger.info(
+                "Auth rejected: local JWT verify failed path=%s", request.url.path
+            )
+            return JSONResponse(
+                status_code=401, content={"detail": "Invalid credentials"}
+            )
 
-        request.state.user_id = identity.get('user_id', '')
-        request.state.username = identity.get('username', '')
+        request.state.user_id = identity.get("user_id", "")
+        request.state.username = identity.get("username", "")
         try:
             return await call_next(request)
         except Exception:
             logger.exception("Auth middleware exception path=%s", request.url.path)
-            return JSONResponse(status_code=401, content={'detail': 'Invalid credentials'})
+            return JSONResponse(
+                status_code=401, content={"detail": "Invalid credentials"}
+            )
 
     def _extract_token(self, request: Request) -> str:
-        auth_header = request.headers.get('Authorization', '').strip()
+        auth_header = request.headers.get("Authorization", "").strip()
         if auth_header:
-            parts = auth_header.split(' ', 1)
+            parts = auth_header.split(" ", 1)
             if len(parts) == 2:
                 scheme, token = parts[0].lower(), parts[1].strip()
-                if scheme in {'bearer', 'jwt', 'token'} and token:
+                if scheme in {"bearer", "jwt", "token"} and token:
                     return token
-            return ''
+            return ""
 
-        cookie_token = (request.cookies.get('access_token') or '').strip()
+        cookie_token = (request.cookies.get("access_token") or "").strip()
         if cookie_token:
             return cookie_token
 
-        query_token = (request.query_params.get('token') or '').strip()
+        query_token = (request.query_params.get("token") or "").strip()
         if query_token:
             return query_token
 
-        return ''
+        return ""
 
     def _validate_locally(self, token: str) -> dict[str, str]:
         try:
             payload = jwt.decode(
                 token,
                 self.settings.auth_secret_key,
-                algorithms=['HS256'],
-                options={'require': ['exp', 'sub']},
+                algorithms=["HS256"],
+                options={"require": ["exp", "sub"]},
             )
         except jwt.PyJWTError:
             return {}
 
-        if payload.get('type') != 'access':
+        if payload.get("type") != "access":
             return {}
 
         return {
-            'user_id': str(payload.get('sub', '')).strip(),
-            'username': str(payload.get('username', '')).strip(),
+            "user_id": str(payload.get("sub", "")).strip(),
+            "username": str(payload.get("username", "")).strip(),
         }

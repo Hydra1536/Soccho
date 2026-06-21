@@ -13,11 +13,32 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="User",
             fields=[
-                ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ("email", django_cryptography.fields.encrypt(models.EmailField(max_length=254, unique=True))),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                (
+                    "email",
+                    django_cryptography.fields.encrypt(
+                        models.EmailField(max_length=254, unique=True)
+                    ),
+                ),
                 ("username", models.CharField(max_length=30, unique=True)),
-                ("password_hash", models.CharField(blank=True, max_length=255, null=True)),
-                ("google_sub", models.CharField(blank=True, max_length=255, null=True, unique=True)),
+                (
+                    "password_hash",
+                    models.CharField(blank=True, max_length=255, null=True),
+                ),
+                (
+                    "google_sub",
+                    models.CharField(
+                        blank=True, max_length=255, null=True, unique=True
+                    ),
+                ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={

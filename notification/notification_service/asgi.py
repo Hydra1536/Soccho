@@ -5,7 +5,7 @@ from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'notification_service.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "notification_service.settings")
 
 django_asgi_app = get_asgi_application()
 
@@ -17,8 +17,8 @@ class _NotificationASGIApp:
     def __init__(self):
         self.protocol_app = ProtocolTypeRouter(
             {
-                'http': django_asgi_app,
-                'websocket': AuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
+                "http": django_asgi_app,
+                "websocket": AuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
             }
         )
         self._event_task = None

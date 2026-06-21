@@ -6,37 +6,72 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
-    debug: bool = Field(default=False, alias='DEBUG')
-    database_url: str = Field(default='', alias='DATABASE_URL')
-    render_internal_redis_url: str = Field(default='redis://redis:6379', alias='RENDER_INTERNAL_REDIS_URL')
-    redis_cache_url: str = Field(default='redis://redis:6379/0', alias='REDIS_CACHE_URL')
-    celery_broker_url: str = Field(default='redis://redis:6379/1', alias='CELERY_BROKER_URL')
-    celery_result_backend: str = Field(default='redis://redis:6379/1', alias='CELERY_RESULT_BACKEND')
-    channel_layers_redis_url: str = Field(default='redis://redis:6379/2', alias='CHANNEL_LAYERS_REDIS_URL')
-    aes_secret_key: str = Field(default='replace_me', alias='AES_SECRET_KEY')
+    debug: bool = Field(default=False, alias="DEBUG")
+    database_url: str = Field(default="", alias="DATABASE_URL")
+    render_internal_redis_url: str = Field(
+        default="redis://redis:6379", alias="RENDER_INTERNAL_REDIS_URL"
+    )
+    redis_cache_url: str = Field(
+        default="redis://redis:6379/0", alias="REDIS_CACHE_URL"
+    )
+    celery_broker_url: str = Field(
+        default="redis://redis:6379/1", alias="CELERY_BROKER_URL"
+    )
+    celery_result_backend: str = Field(
+        default="redis://redis:6379/1", alias="CELERY_RESULT_BACKEND"
+    )
+    channel_layers_redis_url: str = Field(
+        default="redis://redis:6379/2", alias="CHANNEL_LAYERS_REDIS_URL"
+    )
+    aes_secret_key: str = Field(default="replace_me", alias="AES_SECRET_KEY")
 
-    auth_secret_key: str = Field(default='replace_me', alias='AUTH_SECRET_KEY')
-    social_secret_key: str = Field(default='replace_me', alias='SOCIAL_SECRET_KEY')
-    transaction_secret_key: str = Field(default='replace_me', alias='TRANSACTION_SECRET_KEY')
-    notification_secret_key: str = Field(default='replace_me', alias='NOTIFICATION_SECRET_KEY')
-    admin_secret_key: str = Field(default='replace_me', alias='ADMIN_SECRET_KEY')
-    gateway_secret_key: str = Field(default='replace_me', alias='GATEWAY_SECRET_KEY')
+    auth_secret_key: str = Field(default="replace_me", alias="AUTH_SECRET_KEY")
+    social_secret_key: str = Field(default="replace_me", alias="SOCIAL_SECRET_KEY")
+    transaction_secret_key: str = Field(
+        default="replace_me", alias="TRANSACTION_SECRET_KEY"
+    )
+    notification_secret_key: str = Field(
+        default="replace_me", alias="NOTIFICATION_SECRET_KEY"
+    )
+    admin_secret_key: str = Field(default="replace_me", alias="ADMIN_SECRET_KEY")
+    gateway_secret_key: str = Field(default="replace_me", alias="GATEWAY_SECRET_KEY")
 
-    auth_http_base_url: str = Field(default='https://soccho-auth.onrender.com', alias='AUTH_HTTP_BASE_URL')
-    social_http_base_url: str = Field(default='https://soccho-social.onrender.com', alias='SOCIAL_HTTP_BASE_URL')
-    transaction_http_base_url: str = Field(default='https://soccho-transaction.onrender.com', alias='TRANSACTION_HTTP_BASE_URL')
-    notification_http_base_url: str = Field(default='https://soccho-notification.onrender.com', alias='NOTIFICATION_HTTP_BASE_URL')
-    keepalive_interval_seconds: int = Field(default=600, alias='KEEPALIVE_INTERVAL_SECONDS')
+    auth_http_base_url: str = Field(
+        default="https://soccho-auth.onrender.com", alias="AUTH_HTTP_BASE_URL"
+    )
+    social_http_base_url: str = Field(
+        default="https://soccho-social.onrender.com", alias="SOCIAL_HTTP_BASE_URL"
+    )
+    transaction_http_base_url: str = Field(
+        default="https://soccho-transaction.onrender.com",
+        alias="TRANSACTION_HTTP_BASE_URL",
+    )
+    notification_http_base_url: str = Field(
+        default="https://soccho-notification.onrender.com",
+        alias="NOTIFICATION_HTTP_BASE_URL",
+    )
+    keepalive_interval_seconds: int = Field(
+        default=600, alias="KEEPALIVE_INTERVAL_SECONDS"
+    )
 
-    allowed_origins_raw: str = Field(default='https://soccho.onrender.com,https://soccho.vercel.app', alias='ALLOWED_ORIGINS')
-    admin_url_path: str = Field(default='/admin', alias='ADMIN_URL_PATH')
+    allowed_origins_raw: str = Field(
+        default="https://soccho.onrender.com,https://soccho.vercel.app",
+        alias="ALLOWED_ORIGINS",
+    )
+    admin_url_path: str = Field(default="/admin", alias="ADMIN_URL_PATH")
 
     @property
     def allowed_origins(self) -> List[str]:
-        required_origin = 'https://soccho.onrender.com'
-        origins = [origin.strip() for origin in self.allowed_origins_raw.split(',') if origin.strip()]
+        required_origin = "https://soccho.onrender.com"
+        origins = [
+            origin.strip()
+            for origin in self.allowed_origins_raw.split(",")
+            if origin.strip()
+        ]
         if required_origin not in origins:
             origins.append(required_origin)
         return origins

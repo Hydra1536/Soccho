@@ -11,26 +11,29 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.friendships.models import Friendship
-from apps.friendships.serializers import FriendshipActionSerializer, FriendshipSerializer
+from apps.friendships.serializers import (
+    FriendshipActionSerializer,
+    FriendshipSerializer,
+)
 from apps.search.models import SearchableUser
 from apps.search.services import hard_evict_user_caches
 
 
 class FriendshipCursorPagination(CursorPagination):
     page_size = 5
-    ordering = '-created_at'
+    ordering = "-created_at"
 
 
 def _current_user_id(request) -> UUID | None:
-    header_user_id = str(request.headers.get('x-user-id', '')).strip()
+    header_user_id = str(request.headers.get("x-user-id", "")).strip()
     if header_user_id:
         try:
             return UUID(header_user_id)
         except ValueError:
             return None
 
-    user = getattr(request, 'user', None)
-    if user is not None and getattr(user, 'is_authenticated', False):
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
         try:
             return UUID(str(user.id))
         except ValueError:
@@ -40,7 +43,8 @@ def _current_user_id(request) -> UUID | None:
 
 def _find_friendship_pair(user_a: UUID, user_b: UUID) -> Friendship | None:
     return Friendship.objects.filter(
-        Q(requester_id=user_a, addressee_id=user_b) | Q(requester_id=user_b, addressee_id=user_a)
+        Q(requester_id=user_a, addressee_id=user_b)
+        | Q(requester_id=user_b, addressee_id=user_a)
     ).first()
 
 
@@ -49,38 +53,40 @@ def _usernames_for_ids(user_ids: set[str]) -> dict[str, str]:
         return {}
     return {
         str(user_id): username
-        for user_id, username in SearchableUser.objects.filter(id__in=user_ids).values_list('id', 'username')
+        for user_id, username in SearchableUser.objects.filter(
+            id__in=user_ids
+        ).values_list("id", "username")
     }
 
 
 def _username_for_user_id(user_id: UUID) -> str:
     row = SearchableUser.objects.filter(id=user_id).first()
-    return row.username if row is not None else ''
+    return row.username if row is not None else ""
 
 
 def _emit_friend_request_notification(friendship: Friendship):
     payload = {
-        'recipient_id': str(friendship.addressee_id),
-        'requester_id': str(friendship.requester_id),
-        'friendship_id': str(friendship.id),
-        'title': 'New friend request',
-        'body': f"{_username_for_user_id(friendship.requester_id) or 'Someone'} sent you a friend request",
+        "recipient_id": str(friendship.addressee_id),
+        "requester_id": str(friendship.requester_id),
+        "friendship_id": str(friendship.id),
+        "title": "New friend request",
+        "body": f"{_username_for_user_id(friendship.requester_id) or 'Someone'} sent you a friend request",
     }
-    _publish_notification_event('friend.request', payload)
+    _publish_notification_event("friend.request", payload)
 
 
 def _emit_friend_accept_notification(friendship: Friendship, accepter_id: UUID):
     requester_id = str(friendship.requester_id)
-    accepter_username = _username_for_user_id(accepter_id) or 'Your friend'
+    accepter_username = _username_for_user_id(accepter_id) or "Your friend"
     payload = {
-        'recipient_id': requester_id,
-        'requester_id': str(friendship.requester_id),
-        'addressee_id': str(friendship.addressee_id),
-        'friendship_id': str(friendship.id),
-        'title': 'Friend request accepted',
-        'body': f'{accepter_username} accepted your friend request',
+        "recipient_id": requester_id,
+        "requester_id": str(friendship.requester_id),
+        "addressee_id": str(friendship.addressee_id),
+        "friendship_id": str(friendship.id),
+        "title": "Friend request accepted",
+        "body": f"{accepter_username} accepted your friend request",
     }
-    _publish_notification_event('friend.accepted', payload)
+    _publish_notification_event("friend.accepted", payload)
 
 
 def _publish_notification_event(channel: str, payload: dict):
@@ -92,25 +98,27 @@ def _publish_notification_event(channel: str, payload: dict):
         return
 
 
-def _idempotent_friendship_response(friendship: Friendship, requester_id: UUID, addressee_id: UUID):
+def _idempotent_friendship_response(
+    friendship: Friendship, requester_id: UUID, addressee_id: UUID
+):
     if friendship.status == Friendship.STATUS_ACCEPTED:
         return Response(
             {
-                'detail': 'You are already friends',
-                'friendship': FriendshipSerializer(friendship).data,
+                "detail": "You are already friends",
+                "friendship": FriendshipSerializer(friendship).data,
             },
             status=status.HTTP_200_OK,
         )
 
     if friendship.status == Friendship.STATUS_PENDING:
         if friendship.requester_id == requester_id:
-            detail = 'Friend request already sent'
+            detail = "Friend request already sent"
         else:
-            detail = 'This user has already sent you a friend request'
+            detail = "This user has already sent you a friend request"
         return Response(
             {
-                'detail': detail,
-                'friendship': FriendshipSerializer(friendship).data,
+                "detail": detail,
+                "friendship": FriendshipSerializer(friendship).data,
             },
             status=status.HTTP_200_OK,
         )
@@ -119,17 +127,21 @@ def _idempotent_friendship_response(friendship: Friendship, requester_id: UUID, 
         friendship.requester_id = requester_id
         friendship.addressee_id = addressee_id
         friendship.status = Friendship.STATUS_PENDING
-        friendship.save(update_fields=['requester_id', 'addressee_id', 'status', 'updated_at'])
+        friendship.save(
+            update_fields=["requester_id", "addressee_id", "status", "updated_at"]
+        )
         _emit_friend_request_notification(friendship)
         return Response(
             {
-                'detail': 'Friend request sent',
-                'friendship': FriendshipSerializer(friendship).data,
+                "detail": "Friend request sent",
+                "friendship": FriendshipSerializer(friendship).data,
             },
             status=status.HTTP_200_OK,
         )
 
-    return Response({'detail': 'Friendship already exists'}, status=status.HTTP_409_CONFLICT)
+    return Response(
+        {"detail": "Friendship already exists"}, status=status.HTTP_409_CONFLICT
+    )
 
 
 class SendRequestView(APIView):
@@ -139,10 +151,15 @@ class SendRequestView(APIView):
 
         requester_id = _current_user_id(request)
         if requester_id is None:
-            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-        addressee_id = serializer.validated_data['user_id']
+            return Response(
+                {"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
+            )
+        addressee_id = serializer.validated_data["user_id"]
         if requester_id == addressee_id:
-            return Response({'detail': 'Cannot send friend request to yourself'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Cannot send friend request to yourself"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         existing = _find_friendship_pair(requester_id, addressee_id)
         if existing is not None:
@@ -157,11 +174,17 @@ class SendRequestView(APIView):
         except IntegrityError:
             existing = _find_friendship_pair(requester_id, addressee_id)
             if existing is not None:
-                return _idempotent_friendship_response(existing, requester_id, addressee_id)
-            return Response({'detail': 'Friendship already exists'}, status=status.HTTP_409_CONFLICT)
+                return _idempotent_friendship_response(
+                    existing, requester_id, addressee_id
+                )
+            return Response(
+                {"detail": "Friendship already exists"}, status=status.HTTP_409_CONFLICT
+            )
 
         _emit_friend_request_notification(friendship)
-        return Response(FriendshipSerializer(friendship).data, status=status.HTTP_201_CREATED)
+        return Response(
+            FriendshipSerializer(friendship).data, status=status.HTTP_201_CREATED
+        )
 
 
 class AcceptRequestView(APIView):
@@ -171,8 +194,10 @@ class AcceptRequestView(APIView):
 
         current_user_id = _current_user_id(request)
         if current_user_id is None:
-            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-        requester_id = serializer.validated_data['user_id']
+            return Response(
+                {"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
+            )
+        requester_id = serializer.validated_data["user_id"]
 
         friendship = Friendship.objects.filter(
             requester_id=requester_id,
@@ -181,13 +206,17 @@ class AcceptRequestView(APIView):
         ).first()
 
         if friendship is None:
-            return Response({'detail': 'Friend request not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Friend request not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         friendship.status = Friendship.STATUS_ACCEPTED
-        friendship.save(update_fields=['status', 'updated_at'])
+        friendship.save(update_fields=["status", "updated_at"])
         _emit_friend_accept_notification(friendship, current_user_id)
         hard_evict_user_caches(str(current_user_id), str(requester_id))
-        return Response(FriendshipSerializer(friendship).data, status=status.HTTP_200_OK)
+        return Response(
+            FriendshipSerializer(friendship).data, status=status.HTTP_200_OK
+        )
 
 
 class RejectRequestView(APIView):
@@ -197,8 +226,10 @@ class RejectRequestView(APIView):
 
         current_user_id = _current_user_id(request)
         if current_user_id is None:
-            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-        requester_id = serializer.validated_data['user_id']
+            return Response(
+                {"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
+            )
+        requester_id = serializer.validated_data["user_id"]
 
         friendship = Friendship.objects.filter(
             requester_id=requester_id,
@@ -207,11 +238,15 @@ class RejectRequestView(APIView):
         ).first()
 
         if friendship is None:
-            return Response({'detail': 'Friend request not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Friend request not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         friendship.status = Friendship.STATUS_REJECTED
-        friendship.save(update_fields=['status', 'updated_at'])
-        return Response(FriendshipSerializer(friendship).data, status=status.HTTP_200_OK)
+        friendship.save(update_fields=["status", "updated_at"])
+        return Response(
+            FriendshipSerializer(friendship).data, status=status.HTTP_200_OK
+        )
 
 
 class ListFriendsView(APIView):
@@ -220,12 +255,14 @@ class ListFriendsView(APIView):
     def get(self, request):
         user_id = _current_user_id(request)
         if user_id is None:
-            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
+            )
 
         queryset = Friendship.objects.filter(
             Q(requester_id=user_id) | Q(addressee_id=user_id),
             status=Friendship.STATUS_ACCEPTED,
-        ).order_by('-created_at')
+        ).order_by("-created_at")
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(queryset, request, view=self)
@@ -234,18 +271,22 @@ class ListFriendsView(APIView):
 
         counterpart_ids = set()
         for row in payload:
-            requester_id = str(row.get('requester_id', ''))
-            addressee_id = str(row.get('addressee_id', ''))
-            counterpart_ids.add(addressee_id if requester_id == str(user_id) else requester_id)
+            requester_id = str(row.get("requester_id", ""))
+            addressee_id = str(row.get("addressee_id", ""))
+            counterpart_ids.add(
+                addressee_id if requester_id == str(user_id) else requester_id
+            )
 
         usernames = _usernames_for_ids(counterpart_ids)
         enriched = []
         for row in payload:
-            requester_id = str(row.get('requester_id', ''))
-            addressee_id = str(row.get('addressee_id', ''))
-            counterpart_id = addressee_id if requester_id == str(user_id) else requester_id
-            row['counterpart_id'] = counterpart_id
-            row['counterpart_username'] = usernames.get(counterpart_id, '')
+            requester_id = str(row.get("requester_id", ""))
+            addressee_id = str(row.get("addressee_id", ""))
+            counterpart_id = (
+                addressee_id if requester_id == str(user_id) else requester_id
+            )
+            row["counterpart_id"] = counterpart_id
+            row["counterpart_username"] = usernames.get(counterpart_id, "")
             enriched.append(row)
 
         return paginator.get_paginated_response(enriched)
@@ -255,39 +296,50 @@ class ListPendingRequestsView(APIView):
     def get(self, request):
         user_id = _current_user_id(request)
         if user_id is None:
-            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
+            )
 
         incoming = list(
             Friendship.objects.filter(
                 addressee_id=user_id,
                 status=Friendship.STATUS_PENDING,
-            ).order_by('-created_at')
+            ).order_by("-created_at")
         )
         outgoing = list(
             Friendship.objects.filter(
                 requester_id=user_id,
                 status=Friendship.STATUS_PENDING,
-            ).order_by('-created_at')
+            ).order_by("-created_at")
         )
 
-        counterpart_ids = {str(row.requester_id) for row in incoming} | {str(row.addressee_id) for row in outgoing}
+        counterpart_ids = {str(row.requester_id) for row in incoming} | {
+            str(row.addressee_id) for row in outgoing
+        }
         usernames = _usernames_for_ids(counterpart_ids)
 
         incoming_payload = []
         for row in incoming:
             serialized = FriendshipSerializer(row).data
-            serialized['counterpart_id'] = str(row.requester_id)
-            serialized['counterpart_username'] = usernames.get(str(row.requester_id), '')
+            serialized["counterpart_id"] = str(row.requester_id)
+            serialized["counterpart_username"] = usernames.get(
+                str(row.requester_id), ""
+            )
             incoming_payload.append(serialized)
 
         outgoing_payload = []
         for row in outgoing:
             serialized = FriendshipSerializer(row).data
-            serialized['counterpart_id'] = str(row.addressee_id)
-            serialized['counterpart_username'] = usernames.get(str(row.addressee_id), '')
+            serialized["counterpart_id"] = str(row.addressee_id)
+            serialized["counterpart_username"] = usernames.get(
+                str(row.addressee_id), ""
+            )
             outgoing_payload.append(serialized)
 
-        return Response({'incoming': incoming_payload, 'outgoing': outgoing_payload}, status=status.HTTP_200_OK)
+        return Response(
+            {"incoming": incoming_payload, "outgoing": outgoing_payload},
+            status=status.HTTP_200_OK,
+        )
 
 
 class UnfriendView(APIView):
@@ -297,10 +349,15 @@ class UnfriendView(APIView):
 
         current_user_id = _current_user_id(request)
         if current_user_id is None:
-            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-        target_user_id = serializer.validated_data['user_id']
+            return Response(
+                {"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
+            )
+        target_user_id = serializer.validated_data["user_id"]
         if current_user_id == target_user_id:
-            return Response({'detail': 'Cannot unfriend yourself'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Cannot unfriend yourself"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         friendship = Friendship.objects.filter(
             Q(requester_id=current_user_id, addressee_id=target_user_id)
@@ -308,8 +365,12 @@ class UnfriendView(APIView):
             status=Friendship.STATUS_ACCEPTED,
         ).first()
         if friendship is None:
-            return Response({'detail': 'Friendship not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Friendship not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         friendship.delete()
         hard_evict_user_caches(str(current_user_id), str(target_user_id))
-        return Response({'detail': 'Unfriended successfully'}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": "Unfriended successfully"}, status=status.HTTP_200_OK
+        )

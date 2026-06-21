@@ -21,21 +21,21 @@ OAUTH_RETRY_BACKOFF_SECONDS = 1.5
 def _service_routes() -> Dict[str, tuple[str, str]]:
     settings = get_settings()
     return {
-        'auth': (settings.auth_http_base_url, '/api/auth/'),
-        'social': (settings.social_http_base_url, '/api/social/'),
-        'transaction': (settings.transaction_http_base_url, '/api/transactions/'),
-        'transactions': (settings.transaction_http_base_url, '/api/transactions/'),
-        'notification': (settings.notification_http_base_url, '/api/notification/'),
+        "auth": (settings.auth_http_base_url, "/api/auth/"),
+        "social": (settings.social_http_base_url, "/api/social/"),
+        "transaction": (settings.transaction_http_base_url, "/api/transactions/"),
+        "transactions": (settings.transaction_http_base_url, "/api/transactions/"),
+        "notification": (settings.notification_http_base_url, "/api/notification/"),
     }
 
 
 def _graphql_service_map() -> Dict[str, str]:
     settings = get_settings()
     return {
-        'auth': settings.auth_http_base_url,
-        'social': settings.social_http_base_url,
-        'transaction': settings.transaction_http_base_url,
-        'notification': settings.notification_http_base_url,
+        "auth": settings.auth_http_base_url,
+        "social": settings.social_http_base_url,
+        "transaction": settings.transaction_http_base_url,
+        "notification": settings.notification_http_base_url,
     }
 
 
@@ -71,24 +71,24 @@ async def _forward_request(
     service_name: str = "unknown",
 ) -> Response:
     body = await request.body()
-    base = target_base.rstrip('/')
-    path = suffix if suffix.startswith('/') else f'/{suffix}'
+    base = target_base.rstrip("/")
+    path = suffix if suffix.startswith("/") else f"/{suffix}"
     target_url = f"{base}{path}"
     query = request.url.query
     if query:
         target_url = f"{target_url}?{query}"
 
     headers = dict(request.headers)
-    headers.pop('host', None)
-    headers['x-forwarded-proto'] = request.url.scheme
-    if request.headers.get('host'):
-        headers['x-forwarded-host'] = request.headers['host']
-    user_id = getattr(request.state, 'user_id', '')
-    username = getattr(request.state, 'username', '')
+    headers.pop("host", None)
+    headers["x-forwarded-proto"] = request.url.scheme
+    if request.headers.get("host"):
+        headers["x-forwarded-host"] = request.headers["host"]
+    user_id = getattr(request.state, "user_id", "")
+    username = getattr(request.state, "username", "")
     if user_id:
-        headers['x-user-id'] = user_id
+        headers["x-user-id"] = user_id
     if username:
-        headers['x-username'] = username
+        headers["x-username"] = username
 
     max_attempts = max(1, retry_attempts + 1)
     async with httpx.AsyncClient(timeout=timeout_seconds) as client:
@@ -155,18 +155,21 @@ async def _forward_request(
         content=upstream.content,
         status_code=upstream.status_code,
         headers=dict(upstream.headers),
-        media_type=upstream.headers.get('content-type'),
+        media_type=upstream.headers.get("content-type"),
     )
 
 
-@router.api_route('/api/{service}/{path:path}', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
+@router.api_route(
+    "/api/{service}/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+)
 async def proxy_api(service: str, path: str, request: Request):
     route = _service_routes().get(service.lower())
     if not route:
-        raise HTTPException(status_code=404, detail='Service route not found')
+        raise HTTPException(status_code=404, detail="Service route not found")
 
     base, upstream_prefix = route
-    suffix = f'{upstream_prefix}{path}' if path else upstream_prefix
+    suffix = f"{upstream_prefix}{path}" if path else upstream_prefix
     return await _forward_request(
         base,
         suffix,
@@ -176,12 +179,18 @@ async def proxy_api(service: str, path: str, request: Request):
     )
 
 
-@router.api_route('/oauth', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
-@router.api_route('/oauth/', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
-@router.api_route('/oauth/{path:path}', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
-async def proxy_oauth(request: Request, path: str = ''):
+@router.api_route(
+    "/oauth", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+)
+@router.api_route(
+    "/oauth/", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+)
+@router.api_route(
+    "/oauth/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+)
+async def proxy_oauth(request: Request, path: str = ""):
     settings = get_settings()
-    suffix = f'/oauth/{path}' if path else '/oauth/'
+    suffix = f"/oauth/{path}" if path else "/oauth/"
     return await _forward_request(
         settings.auth_http_base_url,
         suffix,
@@ -189,27 +198,29 @@ async def proxy_oauth(request: Request, path: str = ''):
         timeout_seconds=OAUTH_PROXY_TIMEOUT_SECONDS,
         retry_attempts=OAUTH_RETRY_ATTEMPTS,
         retry_backoff_seconds=OAUTH_RETRY_BACKOFF_SECONDS,
-        service_name='auth',
+        service_name="auth",
     )
 
 
-@router.api_route('/graphql', methods=['POST', 'OPTIONS'])
-@router.api_route('/graphql/', methods=['POST', 'OPTIONS'])
-@router.api_route('/graphql/{path:path}', methods=['POST', 'OPTIONS'])
-async def proxy_graphql(request: Request, path: str = ''):
-    if request.method == 'OPTIONS':
+@router.api_route("/graphql", methods=["POST", "OPTIONS"])
+@router.api_route("/graphql/", methods=["POST", "OPTIONS"])
+@router.api_route("/graphql/{path:path}", methods=["POST", "OPTIONS"])
+async def proxy_graphql(request: Request, path: str = ""):
+    if request.method == "OPTIONS":
         return Response(status_code=200)
 
-    service_name = request.headers.get('X-Service', '').strip().lower()
+    service_name = request.headers.get("X-Service", "").strip().lower()
     base = _graphql_service_map().get(service_name)
     if not base:
-        raise HTTPException(status_code=400, detail='X-Service header is required and must be valid')
+        raise HTTPException(
+            status_code=400, detail="X-Service header is required and must be valid"
+        )
 
-    suffix = f'/graphql/{path}' if path else '/graphql/'
+    suffix = f"/graphql/{path}" if path else "/graphql/"
     return await _forward_request(
         base,
         suffix,
         request,
         timeout_seconds=GRAPHQL_PROXY_TIMEOUT_SECONDS,
-        service_name=service_name or 'unknown',
+        service_name=service_name or "unknown",
     )

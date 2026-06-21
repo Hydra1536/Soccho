@@ -13,7 +13,9 @@ class OTPCode(models.Model):
     )
 
     id = models.BigAutoField(primary_key=True)
-    user = models.ForeignKey("users.User", on_delete=models.CASCADE, related_name="otp_codes")
+    user = models.ForeignKey(
+        "users.User", on_delete=models.CASCADE, related_name="otp_codes"
+    )
     code_hash = models.CharField(max_length=128)
     context = models.CharField(max_length=20, choices=CONTEXT_CHOICES)
     expires_at = models.DateTimeField()

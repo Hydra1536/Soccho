@@ -45,11 +45,27 @@ def compute_loyalty_score(user_id: str, rows: list[Transaction]) -> float:
         return 0.0
 
     confirmed_rows = [row for row in rows if row.status in ACTIVE_ACCOUNTING_STATUSES]
-    total_lent = sum((Decimal(row.amount) for row in confirmed_rows if str(row.lender_id) == user_id), start=Decimal('0'))
-    total_borrowed = sum((Decimal(row.amount) for row in confirmed_rows if str(row.borrower_id) == user_id), start=Decimal('0'))
+    total_lent = sum(
+        (
+            Decimal(row.amount)
+            for row in confirmed_rows
+            if str(row.lender_id) == user_id
+        ),
+        start=Decimal("0"),
+    )
+    total_borrowed = sum(
+        (
+            Decimal(row.amount)
+            for row in confirmed_rows
+            if str(row.borrower_id) == user_id
+        ),
+        start=Decimal("0"),
+    )
 
     borrow_rows = [row for row in rows if str(row.borrower_id) == user_id]
-    confirmed_borrow_rows = [row for row in borrow_rows if row.status in ACTIVE_ACCOUNTING_STATUSES]
+    confirmed_borrow_rows = [
+        row for row in borrow_rows if row.status in ACTIVE_ACCOUNTING_STATUSES
+    ]
     due_borrow_rows = [row for row in confirmed_borrow_rows if row.due_date is not None]
 
     if due_borrow_rows:
@@ -70,7 +86,7 @@ def compute_loyalty_score(user_id: str, rows: list[Transaction]) -> float:
     total_flow = total_lent + total_borrowed
     if total_flow > 0:
         lend_advantage = (total_lent - total_borrowed) / total_flow
-        lend_component = float((lend_advantage + Decimal('1')) / Decimal('2'))
+        lend_component = float((lend_advantage + Decimal("1")) / Decimal("2"))
     else:
         lend_component = 0.5
 
@@ -78,7 +94,9 @@ def compute_loyalty_score(user_id: str, rows: list[Transaction]) -> float:
     overdue_pending = [
         row
         for row in borrow_rows
-        if row.status == Transaction.STATUS_PENDING_VERIFICATION and row.due_date is not None and row.due_date < today
+        if row.status == Transaction.STATUS_PENDING_VERIFICATION
+        and row.due_date is not None
+        and row.due_date < today
     ]
     overdue_penalty = (len(overdue_pending) / len(borrow_rows)) if borrow_rows else 0.0
     activity = min(1.0, len(confirmed_rows) / 20.0)
@@ -97,52 +115,80 @@ def compute_dashboard_summary(user_id: str) -> DashboardSummaryComputed:
     rows = list(
         Transaction.objects.filter(is_deleted=False)
         .filter(Q(lender_id=user_id) | Q(borrower_id=user_id))
-        .only('lender_id', 'borrower_id', 'amount', 'status', 'created_at', 'due_date', 'updated_at')
-        .order_by('created_at')
+        .only(
+            "lender_id",
+            "borrower_id",
+            "amount",
+            "status",
+            "created_at",
+            "due_date",
+            "updated_at",
+        )
+        .order_by("created_at")
     )
 
     confirmed_rows = [row for row in rows if row.status in ACTIVE_ACCOUNTING_STATUSES]
-    total_lent = sum((Decimal(row.amount) for row in confirmed_rows if str(row.lender_id) == user_id), start=Decimal('0'))
-    total_borrowed = sum((Decimal(row.amount) for row in confirmed_rows if str(row.borrower_id) == user_id), start=Decimal('0'))
+    total_lent = sum(
+        (
+            Decimal(row.amount)
+            for row in confirmed_rows
+            if str(row.lender_id) == user_id
+        ),
+        start=Decimal("0"),
+    )
+    total_borrowed = sum(
+        (
+            Decimal(row.amount)
+            for row in confirmed_rows
+            if str(row.borrower_id) == user_id
+        ),
+        start=Decimal("0"),
+    )
     total_confirmed = len(confirmed_rows)
 
     monthly_map: dict[str, dict[str, Decimal | str]] = {}
     for row in confirmed_rows:
-        month_key = row.created_at.strftime('%Y-%m')
+        month_key = row.created_at.strftime("%Y-%m")
         if month_key not in monthly_map:
             monthly_map[month_key] = {
-                'month_key': month_key,
-                'label': row.created_at.strftime('%b %y'),
-                'given': Decimal('0'),
-                'received': Decimal('0'),
+                "month_key": month_key,
+                "label": row.created_at.strftime("%b %y"),
+                "given": Decimal("0"),
+                "received": Decimal("0"),
             }
         amount = Decimal(row.amount)
         if str(row.lender_id) == user_id:
-            monthly_map[month_key]['given'] = Decimal(monthly_map[month_key]['given']) + amount
+            monthly_map[month_key]["given"] = (
+                Decimal(monthly_map[month_key]["given"]) + amount
+            )
         if str(row.borrower_id) == user_id:
-            monthly_map[month_key]['received'] = Decimal(monthly_map[month_key]['received']) + amount
+            monthly_map[month_key]["received"] = (
+                Decimal(monthly_map[month_key]["received"]) + amount
+            )
 
     monthly_trend: list[MonthlySummaryRow] = []
     if confirmed_rows:
         first_dt = confirmed_rows[0].created_at
         last_dt = confirmed_rows[-1].created_at
-        for year, month in _month_iter(first_dt.year, first_dt.month, last_dt.year, last_dt.month):
-            key = f'{year:04d}-{month:02d}'
+        for year, month in _month_iter(
+            first_dt.year, first_dt.month, last_dt.year, last_dt.month
+        ):
+            key = f"{year:04d}-{month:02d}"
             if key in monthly_map:
                 row = monthly_map[key]
                 monthly_trend.append(
                     MonthlySummaryRow(
-                        month_key=str(row['month_key']),
-                        label=str(row['label']),
-                        given=float(Decimal(row['given'])),
-                        received=float(Decimal(row['received'])),
+                        month_key=str(row["month_key"]),
+                        label=str(row["label"]),
+                        given=float(Decimal(row["given"])),
+                        received=float(Decimal(row["received"])),
                     )
                 )
             else:
                 monthly_trend.append(
                     MonthlySummaryRow(
                         month_key=key,
-                        label=date(year, month, 1).strftime('%b %y'),
+                        label=date(year, month, 1).strftime("%b %y"),
                         given=0.0,
                         received=0.0,
                     )

@@ -14,30 +14,34 @@ from apps.notifications.retention import cleanup_expired_notifications
 
 
 def _map_event_to_notification(channel: str, payload: dict):
-    if channel == 'transaction.verification_requested':
+    if channel == "transaction.verification_requested":
         ntype = Notification.TYPE_TRANSACTION_VERIFICATION
-    elif channel == 'friend.request':
+    elif channel == "friend.request":
         ntype = Notification.TYPE_FRIEND_REQUEST
-    elif channel == 'friend.accepted':
+    elif channel == "friend.accepted":
         ntype = Notification.TYPE_FRIEND_ACCEPTED
-    elif channel == 'transaction.verified':
+    elif channel == "transaction.verified":
         ntype = Notification.TYPE_TRANSACTION_AGREED
-    elif channel == 'transaction.rejected':
+    elif channel == "transaction.rejected":
         ntype = Notification.TYPE_TRANSACTION_REJECTED
-    elif channel == 'transaction.repayment_recorded':
+    elif channel == "transaction.repayment_recorded":
         ntype = Notification.TYPE_TRANSACTION_REPAYMENT
-    elif channel == 'transaction.due_soon':
+    elif channel == "transaction.due_soon":
         ntype = Notification.TYPE_DUE_SOON
     else:
         ntype = Notification.TYPE_OVERDUE
 
-    recipient_id = payload.get('recipient_id') or payload.get('borrower_id') or payload.get('addressee_id')
+    recipient_id = (
+        payload.get("recipient_id")
+        or payload.get("borrower_id")
+        or payload.get("addressee_id")
+    )
     return recipient_id, ntype
 
 
 @sync_to_async
 def _persist_notification(recipient_id: str, ntype: str, payload: dict):
-    transaction_id = str(payload.get('transaction_id', '')).strip()
+    transaction_id = str(payload.get("transaction_id", "")).strip()
     if transaction_id:
         existing = Notification.objects.filter(
             recipient_id=recipient_id,
@@ -47,12 +51,12 @@ def _persist_notification(recipient_id: str, ntype: str, payload: dict):
         ).first()
         if existing is not None:
             return {
-                'id': existing.id,
-                'recipient_id': str(existing.recipient_id),
-                'type': existing.type,
-                'payload': existing.payload,
-                'is_cleared': existing.is_cleared,
-                'created_at': existing.created_at.isoformat(),
+                "id": existing.id,
+                "recipient_id": str(existing.recipient_id),
+                "type": existing.type,
+                "payload": existing.payload,
+                "is_cleared": existing.is_cleared,
+                "created_at": existing.created_at.isoformat(),
             }
 
     row = Notification.objects.create(
@@ -62,12 +66,12 @@ def _persist_notification(recipient_id: str, ntype: str, payload: dict):
         is_cleared=False,
     )
     return {
-        'id': row.id,
-        'recipient_id': str(row.recipient_id),
-        'type': row.type,
-        'payload': row.payload,
-        'is_cleared': row.is_cleared,
-        'created_at': row.created_at.isoformat(),
+        "id": row.id,
+        "recipient_id": str(row.recipient_id),
+        "type": row.type,
+        "payload": row.payload,
+        "is_cleared": row.is_cleared,
+        "created_at": row.created_at.isoformat(),
     }
 
 
@@ -75,14 +79,14 @@ async def run_pubsub_listener():
     client = redis.from_url(settings.REDIS_CACHE_URL, decode_responses=True)
     pubsub = client.pubsub()
     await pubsub.subscribe(
-        'transaction.verification_requested',
-        'transaction.verified',
-        'transaction.rejected',
-        'transaction.repayment_recorded',
-        'transaction.due_soon',
-        'transaction.overdue',
-        'friend.request',
-        'friend.accepted',
+        "transaction.verification_requested",
+        "transaction.verified",
+        "transaction.rejected",
+        "transaction.repayment_recorded",
+        "transaction.due_soon",
+        "transaction.overdue",
+        "friend.request",
+        "friend.accepted",
     )
 
     layer = get_channel_layer()
@@ -95,13 +99,15 @@ async def run_pubsub_listener():
                 await sync_to_async(cleanup_expired_notifications)()
                 last_cleanup_epoch = now_epoch
 
-            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+            message = await pubsub.get_message(
+                ignore_subscribe_messages=True, timeout=1.0
+            )
             if message is None:
                 await asyncio.sleep(0.1)
                 continue
 
-            channel = message.get('channel')
-            data = message.get('data')
+            channel = message.get("channel")
+            data = message.get("data")
             try:
                 payload = json.loads(data)
             except Exception:
@@ -115,21 +121,21 @@ async def run_pubsub_listener():
             await layer.group_send(
                 f"notifications_{recipient_id}",
                 {
-                    'type': 'broadcast_notification',
-                    'event': channel,
-                    'notification': persisted,
+                    "type": "broadcast_notification",
+                    "event": channel,
+                    "notification": persisted,
                 },
             )
     finally:
         await pubsub.unsubscribe(
-            'transaction.verification_requested',
-            'transaction.verified',
-            'transaction.rejected',
-            'transaction.repayment_recorded',
-            'transaction.due_soon',
-            'transaction.overdue',
-            'friend.request',
-            'friend.accepted',
+            "transaction.verification_requested",
+            "transaction.verified",
+            "transaction.rejected",
+            "transaction.repayment_recorded",
+            "transaction.due_soon",
+            "transaction.overdue",
+            "friend.request",
+            "friend.accepted",
         )
         await pubsub.close()
         await client.close()

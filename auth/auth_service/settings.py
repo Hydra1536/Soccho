@@ -63,9 +63,8 @@ def _database_config():
         }
     raise ValueError("DATABASE_URL must use postgres/postgresql scheme")
 
-DATABASES = {
-    "default": _database_config()
-}
+
+DATABASES = {"default": _database_config()}
 
 AUTH_PASSWORD_VALIDATORS = []
 
@@ -102,7 +101,9 @@ EMAILJS_TEMPLATE_ID = os.getenv("EMAILJS_TEMPLATE_ID", "template_60h0786")
 EMAILJS_PUBLIC_KEY = os.getenv("EMAILJS_PUBLIC_KEY", "selFN3purqbDa4wTj")
 EMAILJS_PRIVATE_KEY = os.getenv("EMAILJS_PRIVATE_KEY", "")
 
-ALLOWED_ORIGINS = [x.strip() for x in os.getenv("ALLOWED_ORIGINS", "").split(",") if x.strip()]
+ALLOWED_ORIGINS = [
+    x.strip() for x in os.getenv("ALLOWED_ORIGINS", "").split(",") if x.strip()
+]
 
 
 def _cache_config():
@@ -134,8 +135,12 @@ AXES_LOCKOUT_PARAMETERS = ["ip_address"]
 AXES_VERBOSE = False
 
 SOCIAL_AUTH_JSONFIELD_ENABLED = True
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID") or os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET") or os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID") or os.getenv(
+    "GOOGLE_OAUTH_CLIENT_ID", ""
+)
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET") or os.getenv(
+    "GOOGLE_OAUTH_CLIENT_SECRET", ""
+)
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = GOOGLE_CLIENT_ID
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = GOOGLE_CLIENT_SECRET
 GOOGLE_OAUTH_REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "").strip()

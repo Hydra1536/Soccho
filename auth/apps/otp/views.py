@@ -42,7 +42,9 @@ class VerifyOTPView(APIView):
             else:
                 user = User.objects.get(username=username)
         except AuthStorageError:
-            return Response(AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                AUTH_SERVICE_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         except User.DoesNotExist:
             return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -69,10 +71,14 @@ class VerifyOTPView(APIView):
         elif context == OTPCode.CONTEXT_CHANGE_PW:
             pending_password_hash = cache.get(_change_password_cache_key(str(user.id)))
             if not pending_password_hash:
-                return Response(INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
+                return Response(
+                    INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED
+                )
             user.password_hash = pending_password_hash
             user.save(update_fields=["password_hash"])
             cache.delete(_change_password_cache_key(str(user.id)))
 
         access, refresh = _issue_tokens(user)
-        return Response({"access": access, "refresh": refresh}, status=status.HTTP_200_OK)
+        return Response(
+            {"access": access, "refresh": refresh}, status=status.HTTP_200_OK
+        )

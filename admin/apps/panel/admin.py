@@ -12,7 +12,7 @@ class User(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'users'
+        db_table = "users"
 
 
 class Transaction(models.Model):
@@ -28,7 +28,7 @@ class Transaction(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'transactions'
+        db_table = "transactions"
 
 
 class Balance(models.Model):
@@ -39,26 +39,28 @@ class Balance(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'balances'
+        db_table = "balances"
 
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ('id', 'username', 'email', 'created_at', 'loyalty_score')
-    search_fields = ('username', 'email')
-    ordering = ('-created_at',)
+    list_display = ("id", "username", "email", "created_at", "loyalty_score")
+    search_fields = ("username", "email")
+    ordering = ("-created_at",)
 
-    fields = ('username', 'email', 'loyalty_score')
-    readonly_fields = ('loyalty_score',)
-    exclude = ('password_hash',)
+    fields = ("username", "email", "loyalty_score")
+    readonly_fields = ("loyalty_score",)
+    exclude = ("password_hash",)
 
     def loyalty_score(self, obj):
-        return '[ENCRYPTED]'
+        return "[ENCRYPTED]"
 
-    loyalty_score.short_description = 'Loyalty Score'
+    loyalty_score.short_description = "Loyalty Score"
 
     def get_queryset(self, request):
-        return super().get_queryset(request).only('id', 'username', 'email', 'created_at')
+        return (
+            super().get_queryset(request).only("id", "username", "email", "created_at")
+        )
 
     def has_view_permission(self, request, obj=None):
         return request.user.is_active and request.user.is_staff
@@ -75,24 +77,43 @@ class UserAdmin(admin.ModelAdmin):
     def get_readonly_fields(self, request, obj=None):
         if obj is None:
             return ()
-        return ('username', 'email', 'loyalty_score')
+        return ("username", "email", "loyalty_score")
 
 
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'lender_id', 'borrower_id', 'friendship_id', 'amount_masked', 'due_date_masked', 'status', 'is_deleted')
-    readonly_fields = ('amount_masked', 'due_date_masked')
-    fields = ('id', 'lender_id', 'borrower_id', 'friendship_id', 'amount_masked', 'due_date_masked', 'status', 'is_deleted', 'created_at')
+    list_display = (
+        "id",
+        "lender_id",
+        "borrower_id",
+        "friendship_id",
+        "amount_masked",
+        "due_date_masked",
+        "status",
+        "is_deleted",
+    )
+    readonly_fields = ("amount_masked", "due_date_masked")
+    fields = (
+        "id",
+        "lender_id",
+        "borrower_id",
+        "friendship_id",
+        "amount_masked",
+        "due_date_masked",
+        "status",
+        "is_deleted",
+        "created_at",
+    )
 
     def amount_masked(self, obj):
-        return '[ENCRYPTED]'
+        return "[ENCRYPTED]"
 
-    amount_masked.short_description = 'Amount'
+    amount_masked.short_description = "Amount"
 
     def due_date_masked(self, obj):
-        return '[ENCRYPTED]'
+        return "[ENCRYPTED]"
 
-    due_date_masked.short_description = 'Due Date'
+    due_date_masked.short_description = "Due Date"
 
     def has_module_permission(self, request):
         return request.user.is_active and request.user.is_staff
@@ -106,14 +127,14 @@ class TransactionAdmin(admin.ModelAdmin):
 
 @admin.register(Balance)
 class BalanceAdmin(admin.ModelAdmin):
-    list_display = ('id', 'friendship_id', 'net_balance_masked', 'version')
-    readonly_fields = ('net_balance_masked',)
-    fields = ('id', 'friendship_id', 'net_balance_masked', 'version')
+    list_display = ("id", "friendship_id", "net_balance_masked", "version")
+    readonly_fields = ("net_balance_masked",)
+    fields = ("id", "friendship_id", "net_balance_masked", "version")
 
     def net_balance_masked(self, obj):
-        return '[ENCRYPTED]'
+        return "[ENCRYPTED]"
 
-    net_balance_masked.short_description = 'Net Balance'
+    net_balance_masked.short_description = "Net Balance"
 
     def has_module_permission(self, request):
         return request.user.is_active and request.user.is_staff

@@ -8,15 +8,23 @@ from apps.search.views import LoyaltyScoreView, SearchHistoryView, UserSearchVie
 
 
 def health(_request):
-    return JsonResponse({'status': 'ok'})
+    return JsonResponse({"status": "ok"})
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('health/', health, name='health'),
-    path('api/social/', include('apps.friendships.urls')),
-    path('api/social/search/', UserSearchView.as_view(), name='social-search'),
-    path('api/social/search/history/', SearchHistoryView.as_view(), name='social-search-history'),
-    path('api/social/loyalty-score/', LoyaltyScoreView.as_view(), name='social-loyalty-score'),
-    path('graphql/', csrf_exempt(GraphQLView.as_view(graphiql=False))),
+    path("admin/", admin.site.urls),
+    path("health/", health, name="health"),
+    path("api/social/", include("apps.friendships.urls")),
+    path("api/social/search/", UserSearchView.as_view(), name="social-search"),
+    path(
+        "api/social/search/history/",
+        SearchHistoryView.as_view(),
+        name="social-search-history",
+    ),
+    path(
+        "api/social/loyalty-score/",
+        LoyaltyScoreView.as_view(),
+        name="social-loyalty-score",
+    ),
+    path("graphql/", csrf_exempt(GraphQLView.as_view(graphiql=False))),
 ]

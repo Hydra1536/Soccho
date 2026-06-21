@@ -12,8 +12,12 @@ class FriendListQuery(graphene.ObjectType):
 
     def resolve_friend_list(self, info):
         request = info.context
-        user_id = str(request.headers.get('x-user-id', '')).strip()
-        if not user_id and hasattr(request, 'user') and getattr(request.user, 'is_authenticated', False):
+        user_id = str(request.headers.get("x-user-id", "")).strip()
+        if (
+            not user_id
+            and hasattr(request, "user")
+            and getattr(request.user, "is_authenticated", False)
+        ):
             user_id = str(request.user.id)
         if not user_id:
             return []
@@ -21,22 +25,35 @@ class FriendListQuery(graphene.ObjectType):
         queryset = (
             Friendship.objects.select_related()
             .prefetch_related()
-            .filter(Q(requester_id=user_id) | Q(addressee_id=user_id), status=Friendship.STATUS_ACCEPTED)
-            .order_by('-created_at')
+            .filter(
+                Q(requester_id=user_id) | Q(addressee_id=user_id),
+                status=Friendship.STATUS_ACCEPTED,
+            )
+            .order_by("-created_at")
         )
 
         friend_ids = {
-            str(edge.addressee_id if str(edge.requester_id) == user_id else edge.requester_id)
+            str(
+                edge.addressee_id
+                if str(edge.requester_id) == user_id
+                else edge.requester_id
+            )
             for edge in queryset
         }
         usernames = {
             str(user_id_value): username
-            for user_id_value, username in SearchableUser.objects.filter(id__in=friend_ids).values_list('id', 'username')
+            for user_id_value, username in SearchableUser.objects.filter(
+                id__in=friend_ids
+            ).values_list("id", "username")
         }
         rows = []
         for edge in queryset:
-            friend_id = edge.addressee_id if str(edge.requester_id) == user_id else edge.requester_id
-            username = usernames.get(str(friend_id), '')
+            friend_id = (
+                edge.addressee_id
+                if str(edge.requester_id) == user_id
+                else edge.requester_id
+            )
+            username = usernames.get(str(friend_id), "")
             try:
                 loyalty_score = get_loyalty_score(str(friend_id))
             except Exception:

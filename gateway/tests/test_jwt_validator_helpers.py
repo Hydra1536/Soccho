@@ -7,7 +7,11 @@ from starlette.requests import Request
 from app.middleware.jwt_validator import JWTValidationMiddleware
 
 
-def _build_request(path: str = "/graphql/", headers: list[tuple[bytes, bytes]] | None = None, query_string: bytes = b""):
+def _build_request(
+    path: str = "/graphql/",
+    headers: list[tuple[bytes, bytes]] | None = None,
+    query_string: bytes = b"",
+):
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},

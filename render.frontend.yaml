@@ -1,6 +1,0 @@
-services:
-  - type: web
-    runtime: docker
-    name: soccho-frontend
-    dockerContext: ./frontend
-    dockerfilePath: ./frontend/Dockerfile

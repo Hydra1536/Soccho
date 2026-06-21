@@ -14,7 +14,9 @@ from apps.users import views as user_views
 
 def test_login_view_blocks_unverified_user(monkeypatch):
     user = SimpleNamespace(is_verified=False, password_hash="unused")
-    monkeypatch.setattr(user_views, "_get_user_by_email", lambda *_args, **_kwargs: user)
+    monkeypatch.setattr(
+        user_views, "_get_user_by_email", lambda *_args, **_kwargs: user
+    )
 
     request = APIRequestFactory().post(
         "/api/auth/login/",
@@ -25,7 +27,9 @@ def test_login_view_blocks_unverified_user(monkeypatch):
     response = user_views.LoginView.as_view()(request)
 
     assert response.status_code == 403
-    assert response.data == {"detail": "Account is not verified. Please verify the OTP code first."}
+    assert response.data == {
+        "detail": "Account is not verified. Please verify the OTP code first."
+    }
 
 
 def test_verify_otp_marks_user_verified_for_register(monkeypatch):
@@ -59,12 +63,22 @@ def test_verify_otp_marks_user_verified_for_register(monkeypatch):
     otp = DummyOTP()
 
     monkeypatch.setattr(otp_views, "_get_user_by_email", lambda *_args, **_kwargs: user)
-    monkeypatch.setattr(otp_views.OTPCode.objects, "filter", lambda **_kwargs: DummyOTPQuerySet(otp))
-    monkeypatch.setattr(otp_views, "_issue_tokens", lambda *_args, **_kwargs: ("access-token", "refresh-token"))
+    monkeypatch.setattr(
+        otp_views.OTPCode.objects, "filter", lambda **_kwargs: DummyOTPQuerySet(otp)
+    )
+    monkeypatch.setattr(
+        otp_views,
+        "_issue_tokens",
+        lambda *_args, **_kwargs: ("access-token", "refresh-token"),
+    )
 
     request = APIRequestFactory().post(
         "/api/auth/otp/verify/",
-        {"email": "user@example.com", "code": "123456", "context": OTPCode.CONTEXT_REGISTER},
+        {
+            "email": "user@example.com",
+            "code": "123456",
+            "context": OTPCode.CONTEXT_REGISTER,
+        },
         format="json",
     )
 
@@ -79,8 +93,12 @@ def test_verify_otp_marks_user_verified_for_register(monkeypatch):
 
 
 def test_register_view_returns_delivery_error_when_email_send_fails(monkeypatch):
-    monkeypatch.setattr(user_views, "_get_user_by_email", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(user_views, "_get_user_by_username", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        user_views, "_get_user_by_email", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        user_views, "_get_user_by_username", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(
         user_views.User.objects,
         "create",
@@ -90,7 +108,9 @@ def test_register_view_returns_delivery_error_when_email_send_fails(monkeypatch)
     monkeypatch.setattr(
         user_views,
         "_send_otp_email",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("email send failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ValueError("email send failed")
+        ),
     )
 
     request = APIRequestFactory().post(
@@ -133,9 +153,15 @@ def test_register_view_resends_otp_for_existing_unverified_user(monkeypatch):
     user = DummyUser()
     pending_otps = DummyFilterResult()
 
-    monkeypatch.setattr(user_views, "_get_user_by_email", lambda *_args, **_kwargs: user)
-    monkeypatch.setattr(user_views, "_get_user_by_username", lambda *_args, **_kwargs: user)
-    monkeypatch.setattr(user_views.OTPCode.objects, "filter", lambda **_kwargs: pending_otps)
+    monkeypatch.setattr(
+        user_views, "_get_user_by_email", lambda *_args, **_kwargs: user
+    )
+    monkeypatch.setattr(
+        user_views, "_get_user_by_username", lambda *_args, **_kwargs: user
+    )
+    monkeypatch.setattr(
+        user_views.OTPCode.objects, "filter", lambda **_kwargs: pending_otps
+    )
     monkeypatch.setattr(user_views, "generate_otp", lambda *_args, **_kwargs: "654321")
     monkeypatch.setattr(user_views, "_send_otp_email", lambda *_args, **_kwargs: None)
 
@@ -164,7 +190,9 @@ def test_register_view_returns_service_unavailable_on_storage_error(monkeypatch)
     monkeypatch.setattr(
         user_views,
         "_get_user_by_email",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(user_views.AuthStorageError("db error")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            user_views.AuthStorageError("db error")
+        ),
     )
 
     request = APIRequestFactory().post(
@@ -243,10 +271,20 @@ def test_change_password_request_sends_otp_instead_of_changing_password(monkeypa
     pending_otps = DummyOtpQuerySet()
     cache_state = {}
 
-    monkeypatch.setattr(user_views, "_get_user_by_email", lambda *_args, **_kwargs: user)
-    monkeypatch.setattr(user_views.OTPCode.objects, "filter", lambda **_kwargs: pending_otps)
-    monkeypatch.setattr(user_views.cache, "set", lambda key, value, timeout=0: cache_state.update({key: value}))
-    monkeypatch.setattr(user_views.cache, "delete", lambda key: cache_state.pop(key, None))
+    monkeypatch.setattr(
+        user_views, "_get_user_by_email", lambda *_args, **_kwargs: user
+    )
+    monkeypatch.setattr(
+        user_views.OTPCode.objects, "filter", lambda **_kwargs: pending_otps
+    )
+    monkeypatch.setattr(
+        user_views.cache,
+        "set",
+        lambda key, value, timeout=0: cache_state.update({key: value}),
+    )
+    monkeypatch.setattr(
+        user_views.cache, "delete", lambda key: cache_state.pop(key, None)
+    )
     monkeypatch.setattr(user_views, "generate_otp", lambda *_args, **_kwargs: "654321")
     monkeypatch.setattr(user_views, "_send_otp_email", lambda *_args, **_kwargs: None)
 
@@ -298,7 +336,9 @@ def test_google_oauth_username_collision_generates_unique_suffix(monkeypatch):
         existing_usernames.add(kwargs["username"])
         return SimpleNamespace(id="user-2", **kwargs)
 
-    monkeypatch.setattr(user_views, "_get_user_by_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        user_views, "_get_user_by_email", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(user_views.User.objects, "filter", fake_filter)
     monkeypatch.setattr(user_views.User.objects, "create", fake_create)
 

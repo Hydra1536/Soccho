@@ -24,8 +24,12 @@ def test_send_request_existing_pending_returns_200(monkeypatch):
         status=Friendship.STATUS_PENDING,
     )
 
-    monkeypatch.setattr(friendship_views, "_current_user_id", lambda _request: requester_id)
-    monkeypatch.setattr(friendship_views, "_find_friendship_pair", lambda *_args, **_kwargs: existing)
+    monkeypatch.setattr(
+        friendship_views, "_current_user_id", lambda _request: requester_id
+    )
+    monkeypatch.setattr(
+        friendship_views, "_find_friendship_pair", lambda *_args, **_kwargs: existing
+    )
     monkeypatch.setattr(friendship_views, "FriendshipSerializer", _mock_serializer)
 
     request = APIRequestFactory().post(
@@ -54,8 +58,12 @@ def test_send_request_rejected_reopens_pending(monkeypatch):
             self.saved_fields = update_fields
 
     existing = Existing()
-    monkeypatch.setattr(friendship_views, "_current_user_id", lambda _request: requester_id)
-    monkeypatch.setattr(friendship_views, "_find_friendship_pair", lambda *_args, **_kwargs: existing)
+    monkeypatch.setattr(
+        friendship_views, "_current_user_id", lambda _request: requester_id
+    )
+    monkeypatch.setattr(
+        friendship_views, "_find_friendship_pair", lambda *_args, **_kwargs: existing
+    )
     monkeypatch.setattr(friendship_views, "FriendshipSerializer", _mock_serializer)
 
     request = APIRequestFactory().post(
@@ -70,7 +78,12 @@ def test_send_request_rejected_reopens_pending(monkeypatch):
     assert existing.status == Friendship.STATUS_PENDING
     assert existing.requester_id == requester_id
     assert existing.addressee_id == addressee_id
-    assert existing.saved_fields == ["requester_id", "addressee_id", "status", "updated_at"]
+    assert existing.saved_fields == [
+        "requester_id",
+        "addressee_id",
+        "status",
+        "updated_at",
+    ]
 
 
 def test_send_request_existing_accepted_returns_200(monkeypatch):
@@ -82,8 +95,12 @@ def test_send_request_existing_accepted_returns_200(monkeypatch):
         status=Friendship.STATUS_ACCEPTED,
     )
 
-    monkeypatch.setattr(friendship_views, "_current_user_id", lambda _request: requester_id)
-    monkeypatch.setattr(friendship_views, "_find_friendship_pair", lambda *_args, **_kwargs: existing)
+    monkeypatch.setattr(
+        friendship_views, "_current_user_id", lambda _request: requester_id
+    )
+    monkeypatch.setattr(
+        friendship_views, "_find_friendship_pair", lambda *_args, **_kwargs: existing
+    )
     monkeypatch.setattr(friendship_views, "FriendshipSerializer", _mock_serializer)
 
     request = APIRequestFactory().post(

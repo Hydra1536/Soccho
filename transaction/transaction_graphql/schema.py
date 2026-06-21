@@ -9,8 +9,12 @@ from .resolvers import (
 
 
 class Query(graphene.ObjectType):
-    friend_ledger = graphene.Field(FriendLedgerType, friendship_id=graphene.UUID(required=True))
-    dashboard_summary = graphene.Field(DashboardSummaryType, user_id=graphene.UUID(required=True))
+    friend_ledger = graphene.Field(
+        FriendLedgerType, friendship_id=graphene.UUID(required=True)
+    )
+    dashboard_summary = graphene.Field(
+        DashboardSummaryType, user_id=graphene.UUID(required=True)
+    )
 
     def resolve_friend_ledger(self, info, friendship_id):
         return resolve_friend_ledger(self, info, friendship_id)

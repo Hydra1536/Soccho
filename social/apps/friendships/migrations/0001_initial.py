@@ -12,31 +12,46 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='Friendship',
+            name="Friendship",
             fields=[
-                ('id', models.BigAutoField(primary_key=True, serialize=False)),
-                ('requester_id', models.UUIDField(default=uuid.uuid4)),
-                ('addressee_id', models.UUIDField(default=uuid.uuid4)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('accepted', 'Accepted'), ('rejected', 'Rejected')], default='pending', max_length=16)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                ("requester_id", models.UUIDField(default=uuid.uuid4)),
+                ("addressee_id", models.UUIDField(default=uuid.uuid4)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("accepted", "Accepted"),
+                            ("rejected", "Rejected"),
+                        ],
+                        default="pending",
+                        max_length=16,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'db_table': 'friendships',
-                'indexes': [
-                    models.Index(fields=['requester_id', 'status'], name='friend_req_status_idx'),
-                    models.Index(fields=['addressee_id', 'status'], name='friend_addr_status_idx'),
-                    models.Index(fields=['created_at'], name='friend_created_idx'),
+                "db_table": "friendships",
+                "indexes": [
+                    models.Index(
+                        fields=["requester_id", "status"], name="friend_req_status_idx"
+                    ),
+                    models.Index(
+                        fields=["addressee_id", "status"], name="friend_addr_status_idx"
+                    ),
+                    models.Index(fields=["created_at"], name="friend_created_idx"),
                 ],
-                'constraints': [
+                "constraints": [
                     models.UniqueConstraint(
-                        Least(F('requester_id'), F('addressee_id')),
-                        Greatest(F('requester_id'), F('addressee_id')),
-                        name='uniq_friendship_pair_any_direction',
+                        Least(F("requester_id"), F("addressee_id")),
+                        Greatest(F("requester_id"), F("addressee_id")),
+                        name="uniq_friendship_pair_any_direction",
                     ),
                     models.CheckConstraint(
-                        check=~models.Q(requester_id=F('addressee_id')),
-                        name='check_friendship_not_self',
+                        check=~models.Q(requester_id=F("addressee_id")),
+                        name="check_friendship_not_self",
                     ),
                 ],
             },

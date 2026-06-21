@@ -7,7 +7,6 @@ from apps.search.models import SearchableUser
 from apps.search.services import (
     contextual_search_usernames,
     fallback_search_usernames,
-    fuzzy_search_usernames,
     get_loyalty_score,
     get_search_history,
     save_search_history,
@@ -15,24 +14,26 @@ from apps.search.services import (
 
 
 def _current_user_id(request) -> str:
-    user_id = str(request.headers.get('x-user-id', '')).strip()
+    user_id = str(request.headers.get("x-user-id", "")).strip()
     if user_id:
         return user_id
-    user = getattr(request, 'user', None)
-    if user is not None and getattr(user, 'is_authenticated', False):
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
         return str(user.id)
-    return ''
+    return ""
 
 
 class UserSearchView(APIView):
     def get(self, request):
         user_id = _current_user_id(request)
         if not user_id:
-            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
+            )
 
-        query = request.query_params.get('q', '').strip()
+        query = request.query_params.get("q", "").strip()
         if not query:
-            return Response({'results': []})
+            return Response({"results": []})
 
         save_search_history(user_id, query)
 
@@ -52,30 +53,41 @@ class UserSearchView(APIView):
                 loyalty_score = 0.0
             payload.append(
                 {
-                    'id': str(user.id),
-                    'username': user.username,
-                    'loyalty_score': loyalty_score,
+                    "id": str(user.id),
+                    "username": user.username,
+                    "loyalty_score": loyalty_score,
                 }
             )
-        payload.sort(key=lambda row: (-(row.get('loyalty_score') or 0), str(row.get('username') or '').lower()))
-        return Response({'results': payload})
+        payload.sort(
+            key=lambda row: (
+                -(row.get("loyalty_score") or 0),
+                str(row.get("username") or "").lower(),
+            )
+        )
+        return Response({"results": payload})
 
 
 class SearchHistoryView(APIView):
     def get(self, request):
         user_id = _current_user_id(request)
         if not user_id:
-            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-        return Response({'history': get_search_history(user_id)})
+            return Response(
+                {"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
+            )
+        return Response({"history": get_search_history(user_id)})
 
 
 class LoyaltyScoreView(APIView):
     def get(self, request):
         user_id = _current_user_id(request)
         if not user_id:
-            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
+            )
         try:
             score = get_loyalty_score(user_id)
         except Exception:
             score = 0.0
-        return Response({'user_id': user_id, 'loyalty_score': score}, status=status.HTTP_200_OK)
+        return Response(
+            {"user_id": user_id, "loyalty_score": score}, status=status.HTTP_200_OK
+        )

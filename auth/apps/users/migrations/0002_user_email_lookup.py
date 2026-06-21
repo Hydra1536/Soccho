@@ -30,7 +30,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="user",
             name="email_lookup",
-            field=models.CharField(blank=True, db_index=True, max_length=64, null=True, unique=True),
+            field=models.CharField(
+                blank=True, db_index=True, max_length=64, null=True, unique=True
+            ),
         ),
         migrations.RunPython(_backfill_email_lookup, migrations.RunPython.noop),
         migrations.AlterField(

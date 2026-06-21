@@ -74,7 +74,11 @@ def test_forward_request_retries_once_for_idempotent_requests(monkeypatch):
             if calls["count"] == 1:
                 req = httpx.Request(kwargs["method"], kwargs["url"])
                 raise httpx.ReadTimeout("first attempt timed out", request=req)
-            return httpx.Response(200, content=b'{"ok": true}', headers={"content-type": "application/json"})
+            return httpx.Response(
+                200,
+                content=b'{"ok": true}',
+                headers={"content-type": "application/json"},
+            )
 
     monkeypatch.setattr(proxy.httpx, "AsyncClient", lambda **kwargs: FlakyClient())
 
@@ -109,7 +113,9 @@ def test_proxy_oauth_uses_oauth_timeout_profile(monkeypatch):
         lambda: SimpleNamespace(auth_http_base_url="https://soccho-auth.onrender.com"),
     )
 
-    response = asyncio.run(proxy.proxy_oauth(_build_request("/oauth/google/start/"), "google/start/"))
+    response = asyncio.run(
+        proxy.proxy_oauth(_build_request("/oauth/google/start/"), "google/start/")
+    )
 
     assert response.status_code == 200
     assert captured["target_base"] == "https://soccho-auth.onrender.com"

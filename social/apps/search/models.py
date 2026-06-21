@@ -10,12 +10,12 @@ class SearchableUser(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'users'
+        db_table = "users"
 
 
 class SearchableTransaction(models.Model):
-    STATUS_AGREED = 'agreed'
-    STATUS_SETTLED = 'settled'
+    STATUS_AGREED = "agreed"
+    STATUS_SETTLED = "settled"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     lender_id = models.UUIDField()
@@ -28,4 +28,4 @@ class SearchableTransaction(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'transactions'
+        db_table = "transactions"

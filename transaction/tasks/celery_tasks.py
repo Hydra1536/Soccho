@@ -44,43 +44,47 @@ def send_due_date_reminders():
     for row in due_soon_rows:
         lender_name = _resolve_username(str(row.lender_id))
         payload = {
-            'event': 'transaction.due_soon',
-            'transaction_id': str(row.transaction_id),
-            'friendship_id': str(row.friendship_id),
-            'recipient_id': str(row.borrower_id),
-            'lender_id': str(row.lender_id),
-            'borrower_id': str(row.borrower_id),
-            'amount': str(row.remaining_amount),
-            'due_date': str(row.due_date),
-            'title': 'Due soon',
-            'body': f'You have a balance of {row.remaining_amount} Taka due soon for {lender_name}.',
-            'route': f'/friend/{row.friendship_id}',
+            "event": "transaction.due_soon",
+            "transaction_id": str(row.transaction_id),
+            "friendship_id": str(row.friendship_id),
+            "recipient_id": str(row.borrower_id),
+            "lender_id": str(row.lender_id),
+            "borrower_id": str(row.borrower_id),
+            "amount": str(row.remaining_amount),
+            "due_date": str(row.due_date),
+            "title": "Due soon",
+            "body": f"You have a balance of {row.remaining_amount} Taka due soon for {lender_name}.",
+            "route": f"/friend/{row.friendship_id}",
         }
-        client.publish('transaction.due_soon', json.dumps(payload))
-        DueRecord.objects.filter(id=row.id).update(due_soon_notified_at=now, updated_at=now)
+        client.publish("transaction.due_soon", json.dumps(payload))
+        DueRecord.objects.filter(id=row.id).update(
+            due_soon_notified_at=now, updated_at=now
+        )
         count += 1
 
     for row in overdue_rows:
         lender_name = _resolve_username(str(row.lender_id))
         payload = {
-            'event': 'transaction.overdue',
-            'transaction_id': str(row.transaction_id),
-            'friendship_id': str(row.friendship_id),
-            'recipient_id': str(row.borrower_id),
-            'lender_id': str(row.lender_id),
-            'borrower_id': str(row.borrower_id),
-            'amount': str(row.remaining_amount),
-            'due_date': str(row.due_date),
-            'title': 'Overdue balance',
-            'body': f'You have an overdue balance of {row.remaining_amount} Taka from {lender_name}.',
-            'route': f'/friend/{row.friendship_id}',
+            "event": "transaction.overdue",
+            "transaction_id": str(row.transaction_id),
+            "friendship_id": str(row.friendship_id),
+            "recipient_id": str(row.borrower_id),
+            "lender_id": str(row.lender_id),
+            "borrower_id": str(row.borrower_id),
+            "amount": str(row.remaining_amount),
+            "due_date": str(row.due_date),
+            "title": "Overdue balance",
+            "body": f"You have an overdue balance of {row.remaining_amount} Taka from {lender_name}.",
+            "route": f"/friend/{row.friendship_id}",
         }
-        client.publish('transaction.overdue', json.dumps(payload))
-        DueRecord.objects.filter(id=row.id).update(overdue_notified_at=now, updated_at=now)
+        client.publish("transaction.overdue", json.dumps(payload))
+        DueRecord.objects.filter(id=row.id).update(
+            overdue_notified_at=now, updated_at=now
+        )
         count += 1
     return count
 
 
 def _resolve_username(user_id: str) -> str:
     row = UserDirectory.objects.filter(id=user_id).first()
-    return row.username if row is not None else 'your friend'
+    return row.username if row is not None else "your friend"

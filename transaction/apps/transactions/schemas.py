@@ -9,10 +9,10 @@ class TransactionCreateIn(Schema):
     lender_id: uuid.UUID
     borrower_id: uuid.UUID
     friendship_id: uuid.UUID
-    friendship_route_id: str = ''
+    friendship_route_id: str = ""
     amount: Decimal
     due_date: date | None = None
-    note: str = ''
+    note: str = ""
     idempotency_key: str
 
 
@@ -41,9 +41,9 @@ class ResolveTransactionIn(Schema):
 
 class RepaymentCreateIn(Schema):
     friendship_id: uuid.UUID
-    friendship_route_id: str = ''
+    friendship_route_id: str = ""
     payer_id: uuid.UUID
     payee_id: uuid.UUID
     amount: Decimal
-    note: str = ''
+    note: str = ""
     idempotency_key: str
