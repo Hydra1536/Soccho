@@ -162,3 +162,4 @@ celery -A transaction_service worker -B
 - Repayments now settle by FIFO deadline order.
 - The gateway owns keepalive behavior; the standalone keepalive worker was removed.
 - The frontend now ships with a real manifest, installable PWA metadata, offline caches, and queued transaction sync.
+ 
